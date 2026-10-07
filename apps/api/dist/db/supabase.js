@@ -34,6 +34,7 @@ if (config_js_1.config.supabaseUrl && config_js_1.config.supabaseServiceKey) {
 }
 // In-Memory Database fallback (strictly partitioned by user_id for RLS enforcement)
 exports.memoryDb = {
+    users: new Map(),
     projects: new Map(),
     scans: new Map(),
     findings: new Map(),

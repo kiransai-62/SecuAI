@@ -11,6 +11,7 @@ import { NewProjectPage } from './pages/NewProjectPage';
 import { ProjectDetailPage } from './pages/ProjectDetailPage';
 import { ScanDetailPage } from './pages/ScanDetailPage';
 import { FindingDetailPage } from './pages/FindingDetailPage';
+import { SettingsPage } from './pages/SettingsPage';
 
 export function App() {
   return (
@@ -73,6 +74,15 @@ export function App() {
               element={
                 <ProtectedRoute>
                   <FindingDetailPage />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/settings"
+              element={
+                <ProtectedRoute>
+                  <SettingsPage />
                 </ProtectedRoute>
               }
             />

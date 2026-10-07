@@ -3,14 +3,8 @@
 @tailwind utilities;
 
 @layer base {
-  :root {
-    --cyber-glow: 0 0 25px -5px rgba(6, 182, 212, 0.25);
-    --crimson-glow: 0 0 25px -5px rgba(244, 63, 94, 0.3);
-    --emerald-glow: 0 0 25px -5px rgba(16, 185, 129, 0.3);
-  }
-
   body {
-    background-color: #05070c;
+    background-color: #090d16;
     color: #f1f5f9;
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   }
@@ -21,7 +15,7 @@
     height: 6px;
   }
   ::-webkit-scrollbar-track {
-    background: #090d15;
+    background: #090d16;
   }
   ::-webkit-scrollbar-thumb {
     background: #1e293b;
@@ -33,51 +27,20 @@
 }
 
 @layer utilities {
-  .glass-panel {
-    background: rgba(15, 20, 32, 0.7);
-    backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+  .neutral-panel {
+    background: #0f172a;
+    border: 1px solid #1e293b;
   }
 
-  .glass-card {
-    background: linear-gradient(135deg, rgba(15, 20, 32, 0.8) 0%, rgba(9, 13, 21, 0.95) 100%);
-    backdrop-filter: blur(16px);
-    border: 1px solid rgba(255, 255, 255, 0.07);
-    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  .accent-indigo {
+    color: #4F46E5;
   }
 
-  .glass-card:hover {
-    border-color: rgba(6, 182, 212, 0.3);
-    box-shadow: 0 8px 30px -10px rgba(6, 182, 212, 0.15);
+  .bg-accent-indigo {
+    background-color: #4F46E5;
   }
 
-  .cyber-gradient-text {
-    background: linear-gradient(135deg, #38bdf8 0%, #06b6d4 50%, #10b981 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-  }
-
-  .danger-gradient-text {
-    background: linear-gradient(135deg, #f43f5e 0%, #fb7185 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-  }
-
-  .success-gradient-text {
-    background: linear-gradient(135deg, #10b981 0%, #34d399 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-  }
-
-  .glow-cyan {
-    box-shadow: var(--cyber-glow);
-  }
-
-  .glow-crimson {
-    box-shadow: var(--crimson-glow);
-  }
-
-  .glow-emerald {
-    box-shadow: var(--emerald-glow);
+  .border-accent-indigo {
+    border-color: #4F46E5;
   }
 }

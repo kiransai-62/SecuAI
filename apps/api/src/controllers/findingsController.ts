@@ -912,4 +912,36 @@ export class FindingsController {
       scan: freshScan,
     });
   }
+
+  /**
+   * GET /api/ai_analysis/:id or /api/ai-analysis/:id
+   * STRICT SECURITY: Return 404 on other users' AI analysis to prevent ID enumeration.
+   */
+  static async getAiAnalysisById(req: Request, res: Response): Promise<void> {
+    const userId = req.user!.id;
+    const { id } = req.params;
+    const db = req.supabase;
+
+    let analysis: any = null;
+    if (db) {
+      const { data } = await db.from('ai_analysis').select('*').eq('id', id).maybeSingle();
+      analysis = data;
+      if (!analysis) {
+        const { data: byFinding } = await db.from('ai_analysis').select('*').eq('finding_id', id).maybeSingle();
+        analysis = byFinding;
+      }
+    } else {
+      analysis = memoryDb.ai_analysis.get(id) || null;
+      if (!analysis) {
+        analysis = Array.from(memoryDb.ai_analysis.values()).find(
+          (a) => a.id === id || a.finding_id === id
+        ) || null;
+      }
+    }
+
+    if (!assertTenantOwnership(analysis, userId, res)) return;
+
+    res.json({ analysis });
+  }
 }
+

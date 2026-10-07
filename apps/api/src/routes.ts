@@ -15,6 +15,8 @@ import {
   ReScanSchema 
 } from '@secuai/shared';
 
+import { AuthController } from './controllers/authController.js';
+
 const router = Router();
 
 // Health Check
@@ -29,8 +31,17 @@ router.get('/health', (req, res) => {
   });
 });
 
-// All API routes require auth context
+// Public Authentication Endpoints (custom bcrypt + JWT per hackathon spec)
+router.post('/auth/register', AuthController.register);
+router.post('/auth/signup', AuthController.register);
+router.post('/auth/login', AuthController.login);
+router.post('/auth/signin', AuthController.login);
+
+// All protected API routes require auth context
 router.use(authMiddleware);
+
+// Authenticated User Context
+router.get('/auth/me', AuthController.me);
 
 // Projects Endpoints: GET/POST /api/projects, GET/PATCH/DELETE /api/projects/:id
 router.get('/projects', ProjectsController.list);
@@ -53,6 +64,9 @@ router.get('/scans/:id', ScansController.getById);
 // Findings & Loop Endpoints: DETECT -> EXPLAIN -> FIX -> VERIFY -> RE-SCAN
 router.get('/scans/:scanId/findings', FindingsController.listByScan);
 router.get('/findings/:id', FindingsController.getById);
+router.get('/findings/:id/analysis', FindingsController.getAiAnalysisById);
+router.get('/ai_analysis/:id', FindingsController.getAiAnalysisById);
+router.get('/ai-analysis/:id', FindingsController.getAiAnalysisById);
 router.post('/findings/:id/explain', FindingsController.explainById);
 router.post('/findings/explain', validateBody(ExplainFindingSchema), FindingsController.explain);
 router.post('/findings/:id/generate-fix', FindingsController.generateFix);

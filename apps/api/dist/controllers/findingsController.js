@@ -849,5 +849,32 @@ class FindingsController {
             scan: freshScan,
         });
     }
+    /**
+     * GET /api/ai_analysis/:id or /api/ai-analysis/:id
+     * STRICT SECURITY: Return 404 on other users' AI analysis to prevent ID enumeration.
+     */
+    static async getAiAnalysisById(req, res) {
+        const userId = req.user.id;
+        const { id } = req.params;
+        const db = req.supabase;
+        let analysis = null;
+        if (db) {
+            const { data } = await db.from('ai_analysis').select('*').eq('id', id).maybeSingle();
+            analysis = data;
+            if (!analysis) {
+                const { data: byFinding } = await db.from('ai_analysis').select('*').eq('finding_id', id).maybeSingle();
+                analysis = byFinding;
+            }
+        }
+        else {
+            analysis = supabase_js_1.memoryDb.ai_analysis.get(id) || null;
+            if (!analysis) {
+                analysis = Array.from(supabase_js_1.memoryDb.ai_analysis.values()).find((a) => a.id === id || a.finding_id === id) || null;
+            }
+        }
+        if (!(0, tenant_js_1.assertTenantOwnership)(analysis, userId, res))
+            return;
+        res.json({ analysis });
+    }
 }
 exports.FindingsController = FindingsController;

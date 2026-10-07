@@ -29,8 +29,16 @@ if (config.supabaseUrl && config.supabaseServiceKey) {
   }
 }
 
+export interface UserRecord {
+  id: string;
+  email: string;
+  password_hash: string;
+  created_at: string;
+}
+
 // In-Memory Database fallback (strictly partitioned by user_id for RLS enforcement)
 export const memoryDb = {
+  users: new Map<string, UserRecord>(),
   projects: new Map<string, Project>(),
   scans: new Map<string, Scan>(),
   findings: new Map<string, FindingRecord>(),

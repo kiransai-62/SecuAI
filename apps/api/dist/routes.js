@@ -8,6 +8,7 @@ const auth_js_1 = require("./middleware/auth.js");
 const validate_js_1 = require("./middleware/validate.js");
 const upload_js_1 = require("./middleware/upload.js");
 const shared_1 = require("@secuai/shared");
+const authController_js_1 = require("./controllers/authController.js");
 const router = (0, express_1.Router)();
 // Health Check
 router.get('/health', (req, res) => {
@@ -20,8 +21,15 @@ router.get('/health', (req, res) => {
         timestamp: new Date().toISOString(),
     });
 });
-// All API routes require auth context
+// Public Authentication Endpoints (custom bcrypt + JWT per hackathon spec)
+router.post('/auth/register', authController_js_1.AuthController.register);
+router.post('/auth/signup', authController_js_1.AuthController.register);
+router.post('/auth/login', authController_js_1.AuthController.login);
+router.post('/auth/signin', authController_js_1.AuthController.login);
+// All protected API routes require auth context
 router.use(auth_js_1.authMiddleware);
+// Authenticated User Context
+router.get('/auth/me', authController_js_1.AuthController.me);
 // Projects Endpoints: GET/POST /api/projects, GET/PATCH/DELETE /api/projects/:id
 router.get('/projects', projectsController_js_1.ProjectsController.list);
 router.post('/projects', (0, validate_js_1.validateBody)(shared_1.CreateProjectSchema), projectsController_js_1.ProjectsController.create);
@@ -40,6 +48,9 @@ router.get('/scans/:id', scansController_js_1.ScansController.getById);
 // Findings & Loop Endpoints: DETECT -> EXPLAIN -> FIX -> VERIFY -> RE-SCAN
 router.get('/scans/:scanId/findings', findingsController_js_1.FindingsController.listByScan);
 router.get('/findings/:id', findingsController_js_1.FindingsController.getById);
+router.get('/findings/:id/analysis', findingsController_js_1.FindingsController.getAiAnalysisById);
+router.get('/ai_analysis/:id', findingsController_js_1.FindingsController.getAiAnalysisById);
+router.get('/ai-analysis/:id', findingsController_js_1.FindingsController.getAiAnalysisById);
 router.post('/findings/:id/explain', findingsController_js_1.FindingsController.explainById);
 router.post('/findings/explain', (0, validate_js_1.validateBody)(shared_1.ExplainFindingSchema), findingsController_js_1.FindingsController.explain);
 router.post('/findings/:id/generate-fix', findingsController_js_1.FindingsController.generateFix);

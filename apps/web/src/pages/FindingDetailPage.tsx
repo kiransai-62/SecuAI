@@ -228,43 +228,21 @@ export const FindingDetailPage: React.FC = () => {
   };
 
   const renderSeverityBadge = (severity?: Severity) => {
-    switch (severity) {
-      case 'CRITICAL':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold font-mono tracking-wider bg-rose-500/15 text-rose-300 border border-rose-500/30">
-            <ShieldAlert className="w-3.5 h-3.5 text-rose-400" aria-hidden="true" />
-            <span>CRITICAL</span>
-          </span>
-        );
-      case 'HIGH':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold font-mono tracking-wider bg-orange-500/15 text-orange-300 border border-orange-500/30">
-            <AlertTriangle className="w-3.5 h-3.5 text-orange-400" aria-hidden="true" />
-            <span>HIGH</span>
-          </span>
-        );
-      case 'MEDIUM':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold font-mono tracking-wider bg-amber-500/15 text-amber-300 border border-amber-500/30">
-            <AlertCircle className="w-3.5 h-3.5 text-amber-400" aria-hidden="true" />
-            <span>MEDIUM</span>
-          </span>
-        );
-      case 'LOW':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold font-mono tracking-wider bg-blue-500/15 text-blue-300 border border-blue-500/30">
-            <Info className="w-3.5 h-3.5 text-blue-400" aria-hidden="true" />
-            <span>LOW</span>
-          </span>
-        );
-      default:
-        return (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold font-mono tracking-wider bg-slate-500/15 text-slate-300 border border-slate-500/30">
-            <Info className="w-3.5 h-3.5 text-slate-400" aria-hidden="true" />
-            <span>INFO</span>
-          </span>
-        );
-    }
+    const sev = severity || 'INFO';
+    const dotColor = {
+      CRITICAL: 'bg-red-500',
+      HIGH: 'bg-orange-500',
+      MEDIUM: 'bg-amber-500',
+      LOW: 'bg-blue-500',
+      INFO: 'bg-slate-400',
+    }[sev] || 'bg-slate-400';
+
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-200">
+        <span className={`w-2 h-2 rounded-full shrink-0 ${dotColor}`} aria-hidden="true" />
+        <span>{sev}</span>
+      </span>
+    );
   };
 
   const renderStatusBadge = (status?: FindingStatus) => {

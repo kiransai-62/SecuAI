@@ -94,16 +94,21 @@ export const FindingCard: React.FC<FindingCardProps> = ({
       <div className="p-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
           <div className="flex flex-wrap items-center gap-2">
-            {/* Severity Badge */}
-            <span
-              className={`text-[10px] font-mono font-bold px-2.5 py-1 rounded-full uppercase tracking-wider flex items-center gap-1.5 ${
-                isCritical
-                  ? 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
-                  : 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
-              }`}
-            >
-              {isCritical ? <ShieldAlert className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
-              {finding.severity}
+            {/* Severity: Text + Dot */}
+            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-200">
+              <span
+                className={`w-2 h-2 rounded-full shrink-0 ${
+                  finding.severity === 'CRITICAL'
+                    ? 'bg-red-500'
+                    : finding.severity === 'HIGH'
+                    ? 'bg-orange-500'
+                    : finding.severity === 'MEDIUM'
+                    ? 'bg-amber-500'
+                    : 'bg-blue-500'
+                }`}
+                aria-hidden="true"
+              />
+              <span>{finding.severity}</span>
             </span>
 
             {/* Source Badge */}
