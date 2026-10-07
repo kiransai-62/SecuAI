@@ -254,7 +254,7 @@ async function runTests() {
     const updatedScan = memoryDb.scans.get(scanId)!;
     console.log(`  Initial score: ${initialScan.security_score}`);
     console.log(`  Updated score: ${updatedScan.security_score}`);
-    assert(updatedScan.security_score > 70, `Score must increase (was 70, now ${updatedScan.security_score})`);
+    assert((updatedScan.security_score ?? 0) > 70, `Score must increase (was 70, now ${updatedScan.security_score})`);
     assert.strictEqual(updatedScan.security_score, 100, 'Score reaches 100 because all active findings are resolved');
     console.log('✓ Project security score increased from 70 to 100!');
 

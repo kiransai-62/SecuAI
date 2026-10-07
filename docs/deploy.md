@@ -6,7 +6,7 @@ This guide details the step-by-step procedure for deploying the **SecuAI** appli
 
 ## 1. Architectural Overview
 
-```
+```text
                    ┌───────────────────────────────────────────┐
                    │               Vercel (Web)                │
                    │        React + Vite + Tailwind SPA        │
@@ -170,15 +170,19 @@ This guide details the step-by-step procedure for deploying the **SecuAI** appli
 Perform these tests on the live production deployment from a **fresh incognito browser session**:
 
 - [ ] **1. API Health Check**:
+
   ```bash
   curl -i https://<your-backend-domain>/api/health
   ```
+
   - Verifies HTTP `200 OK` with JSON response: `{"status":"ok","service":"SecuAI API & Worker",...}`.
 
 - [ ] **2. Strict CORS Verification**:
+
   ```bash
   curl -i -H "Origin: https://unauthorized-evil-domain.com" https://<your-backend-domain>/api/health
   ```
+
   - Verifies that unauthorized origins are rejected by CORS headers.
 
 - [ ] **3. Fresh Incognito App Launch**:
@@ -226,6 +230,7 @@ Perform these tests on the live production deployment from a **fresh incognito b
 
 - [ ] **9. Live Production Row Level Security (RLS) Test**:
   - Run the RLS test suite against the live production instance:
+
     ```bash
     TARGET=prod \
     SUPABASE_URL=https://<your-project>.supabase.co \
@@ -233,6 +238,7 @@ Perform these tests on the live production deployment from a **fresh incognito b
     SUPABASE_SERVICE_ROLE_KEY=<your-service-role-key> \
     npm run test:rls
     ```
+
   - Confirm 100% pass rate:
     - Unauthenticated anon requests return 0 rows.
     - Tenant A cannot read Tenant B projects/scans/findings.

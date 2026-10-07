@@ -78,7 +78,7 @@ async function runTests() {
     const completedScan = memoryDb.scans.get(scanId)!;
     assert.strictEqual(completedScan.status, 'COMPLETED');
     assert(completedScan.progress_step === 'Done' || completedScan.progress_step === 'Completed', 'Progress step is Done/Completed');
-    assert(completedScan.findings_count > 0, 'Scan produced findings');
+    assert((completedScan.findings_count ?? 0) > 0, 'Scan produced findings');
     console.log(`✓ Scan status: ${completedScan.status}`);
     console.log(`✓ Findings count: ${completedScan.findings_count}`);
     console.log(`✓ Security score: ${completedScan.security_score}`);
