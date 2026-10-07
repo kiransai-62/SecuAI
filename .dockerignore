@@ -1,0 +1,14 @@
+node_modules
+**/node_modules
+.git
+.github
+*.log
+.env
+.env.local
+.env.production
+**/__pycache__
+**/.pytest_cache
+**/*.pyc
+**/.venv
+engine/adapter/__fixtures__/sample.json.bak
+temp

@@ -1,0 +1,25 @@
+{
+  "name": "secuai-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "engine/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "dev:api": "npm --workspace=apps/api run dev",
+    "dev:web": "npm --workspace=apps/web run dev",
+    "start:worker": "npm --workspace=apps/api run worker",
+    "test:rls": "tsx scripts/test-rls.ts",
+    "test:auth": "tsx scripts/test-auth.ts",
+    "test:projects": "tsx scripts/test-projects.ts",
+    "test:scans": "tsx scripts/test-scans.ts",
+    "test:worker": "tsx scripts/test-worker.ts",
+    "test:score": "npm --workspace=packages/shared test"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8"
+  }
+}
