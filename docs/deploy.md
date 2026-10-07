@@ -93,7 +93,7 @@ This guide details the step-by-step procedure for deploying the **SecuAI** appli
    | `GEMINI_API_KEY` | `AIzaSy...` | Google AI Studio Gemini API Key |
    | `GEMINI_MODEL` | `gemini-2.5-flash` | Gemini model for explanations and diffs |
    | `WEB_ORIGIN` | `https://secuai.vercel.app` | **Strict CORS**: Frontend Vercel URL |
-   | `DAST_ALLOWED_HOSTS` | `localhost,127.0.0.1` | Host allowlist for DAST probes |
+   | `DAST_ALLOWED_HOSTS` | `demo.secuai.dev` | Host allowlist for DAST probes (demo targets only) |
 
 3. **Configure Health Check**:
    - Health Check Path: `/api/health`

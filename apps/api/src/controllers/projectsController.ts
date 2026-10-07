@@ -36,10 +36,11 @@ export class ProjectsController {
    */
   static async create(req: Request, res: Response): Promise<void> {
     const userId = req.user!.id;
-    const { name, description, source_type = 'ZIP', repository_url, repo_url, framework } = req.body;
+    const { name, description, source_type = 'ZIP', repository_url, repo_url, target_url, confirmed_ownership, framework } = req.body;
     const db = req.supabase;
 
     const normalizedRepoUrl = repository_url || repo_url || null;
+    const normalizedTargetUrl = target_url || (source_type === 'URL' ? normalizedRepoUrl : null);
 
     const newProject: Project = {
       id: crypto.randomUUID(),
@@ -49,6 +50,8 @@ export class ProjectsController {
       source_type: (source_type as SourceType) || 'ZIP',
       repository_url: normalizedRepoUrl,
       repo_url: normalizedRepoUrl,
+      target_url: normalizedTargetUrl,
+      confirmed_ownership: Boolean(confirmed_ownership),
       framework: framework ? framework.trim() : null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),

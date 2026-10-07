@@ -12,7 +12,7 @@ export const config = {
   jwtSecret: process.env.JWT_SECRET || 'secuai-production-tenant-secret-2026',
   corsOrigin: process.env.CORS_ORIGIN || process.env.WEB_ORIGIN || '*',
   webOrigin: process.env.WEB_ORIGIN || process.env.CORS_ORIGIN || '',
-  dastAllowedHosts: (process.env.DAST_ALLOWED_HOSTS || 'localhost,127.0.0.1')
+  dastAllowedHosts: (process.env.DAST_ALLOWED_HOSTS || 'demo.secuai.dev')
     .split(',')
     .map((h) => h.trim())
     .filter(Boolean),

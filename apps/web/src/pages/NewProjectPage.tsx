@@ -31,6 +31,8 @@ export const NewProjectPage: React.FC = () => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [repositoryUrl, setRepositoryUrl] = useState('');
+  const [targetUrl, setTargetUrl] = useState('');
+  const [confirmedOwnership, setConfirmedOwnership] = useState(false);
   const [framework, setFramework] = useState('Next.js / Node.js');
   const [zipFileName, setZipFileName] = useState<string | null>(null);
 
@@ -39,11 +41,19 @@ export const NewProjectPage: React.FC = () => {
     name?: string;
     description?: string;
     repositoryUrl?: string;
+    targetUrl?: string;
+    confirmedOwnership?: string;
     general?: string;
   }>({});
 
   const validate = (): boolean => {
-    const newErrors: { name?: string; description?: string; repositoryUrl?: string } = {};
+    const newErrors: {
+      name?: string;
+      description?: string;
+      repositoryUrl?: string;
+      targetUrl?: string;
+      confirmedOwnership?: string;
+    } = {};
 
     const trimmedName = name.trim();
     if (!trimmedName) {
@@ -63,6 +73,16 @@ export const NewProjectPage: React.FC = () => {
       } else if (!GITHUB_REGEX.test(trimmedUrl)) {
         newErrors.repositoryUrl = 'Repository URL must follow the exact format https://github.com/<owner>/<repo>';
       }
+    } else if (sourceType === 'URL') {
+      const trimmedTarget = targetUrl.trim();
+      if (!trimmedTarget) {
+        newErrors.targetUrl = 'Target URL is required for live endpoint scan';
+      } else if (!trimmedTarget.startsWith('http://') && !trimmedTarget.startsWith('https://')) {
+        newErrors.targetUrl = 'Target URL must start with http:// or https://';
+      }
+      if (!confirmedOwnership) {
+        newErrors.confirmedOwnership = 'You must confirm ownership/authorization to scan this target';
+      }
     }
 
     setErrors(newErrors);
@@ -76,6 +96,8 @@ export const NewProjectPage: React.FC = () => {
         description: description.trim() || null,
         source_type: sourceType,
         repository_url: sourceType === 'GITHUB' ? repositoryUrl.trim() : null,
+        target_url: sourceType === 'URL' ? targetUrl.trim() : null,
+        confirmed_ownership: sourceType === 'URL' ? confirmedOwnership : undefined,
         framework: framework.trim() || null,
       });
     },
@@ -93,6 +115,20 @@ export const NewProjectPage: React.FC = () => {
           }
         } catch (scanErr: any) {
           console.warn('[NewProjectPage] Initial scan trigger warning:', scanErr);
+        }
+      } else if (newProject.source_type === 'URL' && (newProject.target_url || targetUrl)) {
+        try {
+          const newScan = await api.createProjectScan(newProject.id, {
+            target_url: newProject.target_url || targetUrl.trim(),
+            confirmed_ownership: confirmedOwnership,
+          });
+          toast.success('Project created and authorized DAST URL scan queued!');
+          if (newScan?.id) {
+            navigate(`/scans/${newScan.id}`);
+            return;
+          }
+        } catch (scanErr: any) {
+          console.warn('[NewProjectPage] URL scan trigger warning:', scanErr);
         }
       }
       toast.success('Project created successfully!');
@@ -250,23 +286,38 @@ export const NewProjectPage: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* URL Option - Strictly marked "Coming Soon" */}
+                  {/* URL Option - Authorized DAST */}
                   <div
-                    id="source-picker-url-disabled"
-                    className="p-4 rounded-2xl border border-white/5 bg-white/[0.01] opacity-60 cursor-not-allowed relative overflow-hidden"
+                    id="source-picker-url"
+                    onClick={() => {
+                      setSourceType('URL');
+                      setErrors((prev) => ({
+                        ...prev,
+                        repositoryUrl: undefined,
+                        targetUrl: undefined,
+                        confirmedOwnership: undefined,
+                      }));
+                    }}
+                    className={`p-4 rounded-2xl border cursor-pointer transition-all relative overflow-hidden ${
+                      sourceType === 'URL'
+                        ? 'bg-blue-950/20 border-blue-500/50 shadow-[0_0_20px_rgba(59,130,246,0.15)] ring-1 ring-blue-500/50'
+                        : 'bg-white/[0.02] border-white/5 hover:bg-white/[0.04] hover:border-white/10'
+                    }`}
                   >
                     <div className="flex items-start justify-between">
-                      <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-400/60 border border-blue-500/10">
+                      <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20">
                         <Globe className="w-5 h-5" />
                       </div>
-                      <span className="px-2 py-0.5 rounded-full text-[9px] font-mono font-bold tracking-wider uppercase bg-blue-500/10 text-blue-400 border border-blue-500/30">
-                        Coming Soon
-                      </span>
+                      {sourceType === 'URL' && (
+                        <div className="w-5 h-5 rounded-full bg-blue-500 text-black flex items-center justify-center">
+                          <Check className="w-3.5 h-3.5 stroke-[3]" />
+                        </div>
+                      )}
                     </div>
                     <div className="mt-3.5">
-                      <h4 className="text-xs font-bold text-slate-400">Live URL Endpoint</h4>
-                      <p className="mt-1 text-[11px] text-slate-500 leading-snug">
-                        DAST dynamic penetration scanning against live APIs.
+                      <h4 className="text-xs font-bold text-white">Live URL Endpoint</h4>
+                      <p className="mt-1 text-[11px] text-slate-400 leading-snug">
+                        DAST dynamic security scan against authorized web targets.
                       </p>
                     </div>
                   </div>

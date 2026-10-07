@@ -53,6 +53,8 @@ export declare const CreateProjectSchema: z.ZodEffects<z.ZodObject<{
     source_type: z.ZodDefault<z.ZodEnum<["ZIP", "GITHUB", "URL"]>>;
     repository_url: z.ZodNullable<z.ZodOptional<z.ZodString>>;
     repo_url: z.ZodNullable<z.ZodOptional<z.ZodString>>;
+    target_url: z.ZodNullable<z.ZodOptional<z.ZodString>>;
+    confirmed_ownership: z.ZodOptional<z.ZodBoolean>;
     framework: z.ZodNullable<z.ZodOptional<z.ZodString>>;
 }, "strip", z.ZodTypeAny, {
     name: string;
@@ -60,6 +62,8 @@ export declare const CreateProjectSchema: z.ZodEffects<z.ZodObject<{
     description?: string | null | undefined;
     repository_url?: string | null | undefined;
     repo_url?: string | null | undefined;
+    target_url?: string | null | undefined;
+    confirmed_ownership?: boolean | undefined;
     framework?: string | null | undefined;
 }, {
     name: string;
@@ -67,6 +71,8 @@ export declare const CreateProjectSchema: z.ZodEffects<z.ZodObject<{
     source_type?: "ZIP" | "GITHUB" | "URL" | undefined;
     repository_url?: string | null | undefined;
     repo_url?: string | null | undefined;
+    target_url?: string | null | undefined;
+    confirmed_ownership?: boolean | undefined;
     framework?: string | null | undefined;
 }>, {
     name: string;
@@ -74,6 +80,8 @@ export declare const CreateProjectSchema: z.ZodEffects<z.ZodObject<{
     description?: string | null | undefined;
     repository_url?: string | null | undefined;
     repo_url?: string | null | undefined;
+    target_url?: string | null | undefined;
+    confirmed_ownership?: boolean | undefined;
     framework?: string | null | undefined;
 }, {
     name: string;
@@ -81,6 +89,8 @@ export declare const CreateProjectSchema: z.ZodEffects<z.ZodObject<{
     source_type?: "ZIP" | "GITHUB" | "URL" | undefined;
     repository_url?: string | null | undefined;
     repo_url?: string | null | undefined;
+    target_url?: string | null | undefined;
+    confirmed_ownership?: boolean | undefined;
     framework?: string | null | undefined;
 }>;
 export declare const UpdateProjectSchema: z.ZodEffects<z.ZodObject<{
@@ -121,19 +131,22 @@ export declare const UpdateProjectSchema: z.ZodEffects<z.ZodObject<{
 }>;
 export declare const CreateScanSchema: z.ZodObject<{
     project_id: z.ZodString;
-    target_type: z.ZodEnum<["repo", "upload", "demo"]>;
+    target_type: z.ZodEnum<["repo", "upload", "demo", "url"]>;
     target_path: z.ZodString;
-    scan_mode: z.ZodDefault<z.ZodEnum<["code_only", "full", "quick"]>>;
+    scan_mode: z.ZodDefault<z.ZodEnum<["code_only", "full", "quick", "url_only", "dast"]>>;
+    confirmed_ownership: z.ZodOptional<z.ZodBoolean>;
 }, "strip", z.ZodTypeAny, {
     project_id: string;
-    target_type: "repo" | "upload" | "demo";
+    target_type: "repo" | "upload" | "demo" | "url";
     target_path: string;
-    scan_mode: "code_only" | "full" | "quick";
+    scan_mode: "code_only" | "full" | "quick" | "url_only" | "dast";
+    confirmed_ownership?: boolean | undefined;
 }, {
     project_id: string;
-    target_type: "repo" | "upload" | "demo";
+    target_type: "repo" | "upload" | "demo" | "url";
     target_path: string;
-    scan_mode?: "code_only" | "full" | "quick" | undefined;
+    confirmed_ownership?: boolean | undefined;
+    scan_mode?: "code_only" | "full" | "quick" | "url_only" | "dast" | undefined;
 }>;
 export declare const ExplainFindingSchema: z.ZodObject<{
     finding_id: z.ZodString;

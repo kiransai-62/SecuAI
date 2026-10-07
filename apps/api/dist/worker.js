@@ -25,6 +25,7 @@ const gitClone_js_1 = require("./lib/gitClone.js");
 const storage_js_1 = require("./lib/storage.js");
 const recomputeScan_js_1 = require("./services/recomputeScan.js");
 const gitWorkspace_js_1 = require("./lib/gitWorkspace.js");
+const dastGuards_js_1 = require("./lib/dastGuards.js");
 /**
  * Base directory for temporary scan workspaces.
  * Kept for apply-fix / verify patch workflows; purged by 24h TTL cleanup job.
@@ -238,93 +239,201 @@ async function processScanJob(scan) {
     const workspacePath = path_1.default.join(exports.WORKSPACE_BASE_DIR, scanId);
     try {
         console.log(`[SecuAI Worker] Claimed scan ${scanId} for project ${scan.project_id}. Starting execution...`);
-        // --------------------------------------------------------------------------
-        // Step 1: Preparing
-        // --------------------------------------------------------------------------
-        await updateScanState(scanId, {
-            progress_step: 'Preparing',
-            workspace_path: workspacePath,
-        });
-        if (!fs_1.default.existsSync(exports.WORKSPACE_BASE_DIR)) {
-            fs_1.default.mkdirSync(exports.WORKSPACE_BASE_DIR, { recursive: true });
-        }
-        if (fs_1.default.existsSync(workspacePath)) {
-            fs_1.default.rmSync(workspacePath, { recursive: true, force: true });
-        }
-        fs_1.default.mkdirSync(workspacePath, { recursive: true });
-        // Workspace extraction (ZIP) or clone (GitHub)
-        // NEVER run npm install or user code
-        if (scan.target_type === 'upload' || scan.storage_path) {
-            const storagePath = scan.storage_path || scan.target_path;
-            const zipBuffer = await (0, storage_js_1.getScanZipBuffer)(storagePath, supabase_js_1.serviceRoleSupabase || undefined);
-            if (!zipBuffer) {
-                throw new Error(`Upload archive not found in storage: ${storagePath}`);
-            }
-            await (0, safeExtract_js_1.safeExtractZip)(zipBuffer, workspacePath);
-        }
-        else if (scan.target_type === 'repo' ||
-            scan.target_type === 'GITHUB' ||
+        const isGitHubScan = scan.target_type === 'repo' ||
             scan.target_type === 'github' ||
-            scan.target_path?.startsWith('https://github.com')) {
-            await (0, gitClone_js_1.cloneGitHubRepo)(scan.target_path, workspacePath);
-        }
-        else if (fs_1.default.existsSync(scan.target_path)) {
-            // Local path copying for test fixtures/demo directories
-            fs_1.default.cpSync(scan.target_path, workspacePath, { recursive: true });
-        }
-        else {
-            throw new Error(`Unsupported scan target: ${scan.target_path}`);
-        }
-        // Initialize git repository in workspace at extract time for git apply workflows
-        (0, gitWorkspace_js_1.initWorkspaceGit)(workspacePath);
-        // --------------------------------------------------------------------------
-        // Step 2: Detecting project
-        // --------------------------------------------------------------------------
-        await updateScanState(scanId, {
-            progress_step: 'Detecting project',
-        });
-        const framework = detectProjectFramework(workspacePath);
-        if (supabase_js_1.serviceRoleSupabase) {
-            try {
-                await supabase_js_1.serviceRoleSupabase
-                    .from('projects')
-                    .update({ framework })
-                    .eq('id', scan.project_id)
-                    .is('framework', null);
-            }
-            catch { }
-        }
-        else {
-            const p = supabase_js_1.memoryDb.projects.get(scan.project_id);
-            if (p && !p.framework)
-                p.framework = framework;
-        }
-        // --------------------------------------------------------------------------
-        // Step 3: Scanning
-        // --------------------------------------------------------------------------
-        await updateScanState(scanId, {
-            progress_step: 'Scanning',
-        });
-        let rawReport;
-        try {
-            rawReport = await (0, engine_adapter_1.runScan)(workspacePath, { timeoutMs: 60000 });
-        }
-        catch (engineErr) {
-            console.warn(`[SecuAI Worker] runScan adapter notice: ${engineErr.message}. Checking engine fallback.`);
-            rawReport = await engine_adapter_1.EngineScannerRunner.runScan({
-                targetPath: workspacePath,
-                scanMode: scan.scan_mode || 'code_only',
-                timeoutMs: 60000,
+            scan.target_type === 'GITHUB' ||
+            scan.target_path?.startsWith('https://github.com');
+        const isUrlScan = !isGitHubScan &&
+            (scan.target_type === 'url' ||
+                scan.scan_mode === 'dast' ||
+                scan.scan_mode === 'url_only' ||
+                (scan.target_type !== 'upload' &&
+                    Boolean(scan.target_path?.startsWith('http://') || scan.target_path?.startsWith('https://'))));
+        let findings = [];
+        let scanResultJson = null;
+        let scanDurationSeconds = 0;
+        if (isUrlScan) {
+            const dastStartTime = Date.now();
+            // Step 1: Preparing
+            await updateScanState(scanId, {
+                progress_step: 'Preparing',
             });
+            // 1. Re-validate DNS and SSRF guards at connect time
+            const validation = await (0, dastGuards_js_1.validateDastTarget)(scan.target_path, Boolean(scan.confirmed_ownership ?? true));
+            if (!validation.valid) {
+                throw new Error(`DAST Target Security Validation Failed: ${validation.error}`);
+            }
+            // 2. Pre-flight engine check: Stop and report instead of faking results
+            const browserCheck = await (0, dastGuards_js_1.checkDastBrowserAvailable)();
+            if (!browserCheck.available) {
+                throw new Error(`DAST engine cannot run in this environment: ${browserCheck.reason}. Scan stopped without faking results.`);
+            }
+            // Step 2: Detecting project
+            await updateScanState(scanId, {
+                progress_step: 'Detecting project',
+            });
+            // Step 3: Scanning (Probe live endpoint with 5 min timeout, rate cap, max 3 redirects)
+            await updateScanState(scanId, {
+                progress_step: 'Scanning',
+            });
+            const probeResult = await (0, dastGuards_js_1.executeSafeDastProbe)(scan.target_path, Boolean(scan.confirmed_ownership ?? true), {
+                maxRedirects: 3,
+                timeoutMs: 300000, // 5 min timeout
+                delayBetweenRequestsMs: 200,
+            });
+            // Step 4: Normalizing findings (source=DAST)
+            await updateScanState(scanId, {
+                progress_step: 'Normalizing',
+            });
+            const headers = probeResult.headers;
+            if (!headers['content-security-policy']) {
+                findings.push((0, dastGuards_js_1.normalizeDastFinding)({
+                    title: 'Missing Content-Security-Policy header on live endpoint',
+                    category: 'missing_security_headers',
+                    severity: 'MEDIUM',
+                    confidence: 0.95,
+                    endpoint: probeResult.finalUrl,
+                    description: `The live endpoint '${probeResult.finalUrl}' does not return a Content-Security-Policy (CSP) header, increasing exposure to cross-site scripting (XSS) and data injection.`,
+                    evidence: {
+                        scanner_name: 'dast_header_analyzer',
+                        status_code: probeResult.statusCode,
+                        headers: probeResult.headers,
+                        redirects_followed: probeResult.redirectsFollowed,
+                    },
+                }));
+            }
+            if (!headers['strict-transport-security'] && probeResult.finalUrl.startsWith('https://')) {
+                findings.push((0, dastGuards_js_1.normalizeDastFinding)({
+                    title: 'Missing Strict-Transport-Security (HSTS) header',
+                    category: 'missing_security_headers',
+                    severity: 'LOW',
+                    confidence: 0.95,
+                    endpoint: probeResult.finalUrl,
+                    description: `The live HTTPS endpoint does not enforce HSTS, permitting potential man-in-the-middle downgrade attacks.`,
+                    evidence: {
+                        scanner_name: 'dast_hsts_analyzer',
+                        status_code: probeResult.statusCode,
+                        headers: probeResult.headers,
+                    },
+                }));
+            }
+            if (headers['access-control-allow-origin'] === '*') {
+                findings.push((0, dastGuards_js_1.normalizeDastFinding)({
+                    title: 'Overly permissive CORS wildcard (Access-Control-Allow-Origin: *)',
+                    category: 'cors_misconfiguration',
+                    severity: 'HIGH',
+                    confidence: 0.9,
+                    endpoint: probeResult.finalUrl,
+                    description: `The live API endpoint sets Access-Control-Allow-Origin to '*', allowing any third-party origin to read cross-origin responses.`,
+                    evidence: {
+                        scanner_name: 'dast_cors_analyzer',
+                        status_code: probeResult.statusCode,
+                        headers: probeResult.headers,
+                    },
+                }));
+            }
+            scanDurationSeconds = Math.max(1, Math.round((Date.now() - dastStartTime) / 1000));
+            scanResultJson = {
+                target_url: probeResult.finalUrl,
+                status_code: probeResult.statusCode,
+                headers: probeResult.headers,
+                redirects_followed: probeResult.redirectsFollowed,
+                findings_count: findings.length,
+                scan_duration_seconds: scanDurationSeconds,
+                scanners_run: ['dast_header_analyzer', 'dast_hsts_analyzer', 'dast_cors_analyzer'],
+            };
         }
-        // --------------------------------------------------------------------------
-        // Step 4: Normalizing & Regression Detection
-        // --------------------------------------------------------------------------
-        await updateScanState(scanId, {
-            progress_step: 'Normalizing',
-        });
-        const normalized = (0, engine_adapter_1.normalizeReport)(rawReport);
-        const findings = normalized.findings;
+        else {
+            // --------------------------------------------------------------------------
+            // Step 1: Preparing
+            // --------------------------------------------------------------------------
+            await updateScanState(scanId, {
+                progress_step: 'Preparing',
+                workspace_path: workspacePath,
+            });
+            if (!fs_1.default.existsSync(exports.WORKSPACE_BASE_DIR)) {
+                fs_1.default.mkdirSync(exports.WORKSPACE_BASE_DIR, { recursive: true });
+            }
+            if (fs_1.default.existsSync(workspacePath)) {
+                fs_1.default.rmSync(workspacePath, { recursive: true, force: true });
+            }
+            fs_1.default.mkdirSync(workspacePath, { recursive: true });
+            // Workspace extraction (ZIP) or clone (GitHub)
+            // NEVER run npm install or user code
+            if (scan.target_type === 'upload' || scan.storage_path) {
+                const storagePath = scan.storage_path || scan.target_path;
+                const zipBuffer = await (0, storage_js_1.getScanZipBuffer)(storagePath, supabase_js_1.serviceRoleSupabase || undefined);
+                if (!zipBuffer) {
+                    throw new Error(`Upload archive not found in storage: ${storagePath}`);
+                }
+                await (0, safeExtract_js_1.safeExtractZip)(zipBuffer, workspacePath);
+            }
+            else if (scan.target_type === 'repo' ||
+                scan.target_type === 'GITHUB' ||
+                scan.target_type === 'github' ||
+                scan.target_path?.startsWith('https://github.com')) {
+                await (0, gitClone_js_1.cloneGitHubRepo)(scan.target_path, workspacePath);
+            }
+            else if (fs_1.default.existsSync(scan.target_path)) {
+                // Local path copying for test fixtures/demo directories
+                fs_1.default.cpSync(scan.target_path, workspacePath, { recursive: true });
+            }
+            else {
+                throw new Error(`Unsupported scan target: ${scan.target_path}`);
+            }
+            // Initialize git repository in workspace at extract time for git apply workflows
+            (0, gitWorkspace_js_1.initWorkspaceGit)(workspacePath);
+            // --------------------------------------------------------------------------
+            // Step 2: Detecting project
+            // --------------------------------------------------------------------------
+            await updateScanState(scanId, {
+                progress_step: 'Detecting project',
+            });
+            const framework = detectProjectFramework(workspacePath);
+            if (supabase_js_1.serviceRoleSupabase) {
+                try {
+                    await supabase_js_1.serviceRoleSupabase
+                        .from('projects')
+                        .update({ framework })
+                        .eq('id', scan.project_id)
+                        .is('framework', null);
+                }
+                catch { }
+            }
+            else {
+                const p = supabase_js_1.memoryDb.projects.get(scan.project_id);
+                if (p && !p.framework)
+                    p.framework = framework;
+            }
+            // --------------------------------------------------------------------------
+            // Step 3: Scanning
+            // --------------------------------------------------------------------------
+            await updateScanState(scanId, {
+                progress_step: 'Scanning',
+            });
+            let rawReport;
+            try {
+                rawReport = await (0, engine_adapter_1.runScan)(workspacePath, { timeoutMs: 60000 });
+            }
+            catch (engineErr) {
+                console.warn(`[SecuAI Worker] runScan adapter notice: ${engineErr.message}. Checking engine fallback.`);
+                rawReport = await engine_adapter_1.EngineScannerRunner.runScan({
+                    targetPath: workspacePath,
+                    scanMode: scan.scan_mode || 'code_only',
+                    timeoutMs: 60000,
+                });
+            }
+            // --------------------------------------------------------------------------
+            // Step 4: Normalizing & Regression Detection
+            // --------------------------------------------------------------------------
+            await updateScanState(scanId, {
+                progress_step: 'Normalizing',
+            });
+            const normalized = (0, engine_adapter_1.normalizeReport)(rawReport);
+            findings = normalized.findings;
+            scanResultJson = rawReport;
+            scanDurationSeconds = rawReport.scan_duration_seconds || 0;
+        }
         // Regression Check:
         // If a fingerprint was VERIFIED in a previous scan of this project and appears again -> status REGRESSED
         const verifiedFingerprints = new Set();
@@ -437,8 +546,8 @@ async function processScanJob(scan) {
             low_count: scoreMetrics.counts.low,
             findings_count: scoreMetrics.counts.total,
             security_score: scoreMetrics.score,
-            result_json: rawReport,
-            scan_duration_seconds: rawReport.scan_duration_seconds || 0,
+            result_json: scanResultJson,
+            scan_duration_seconds: scanDurationSeconds,
             completed_at: completedAt,
             workspace_path: workspacePath, // Kept for apply-fix/verify; TTL cleanup after 24h
         });

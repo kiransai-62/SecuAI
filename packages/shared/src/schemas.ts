@@ -45,19 +45,37 @@ export const CreateProjectSchema = z
     source_type: SourceTypeSchema.default('ZIP'),
     repository_url: z.string().trim().optional().nullable(),
     repo_url: z.string().trim().optional().nullable(), // Backwards compatibility alias
+    target_url: z.string().trim().optional().nullable(),
+    confirmed_ownership: z.boolean().optional(),
     framework: z.string().trim().max(50).optional().nullable(),
   })
   .superRefine((data, ctx) => {
-    const url = data.repository_url || data.repo_url;
+    const ghUrl = data.repository_url || data.repo_url;
     if (data.source_type === 'GITHUB') {
-      if (!url || !GITHUB_REPO_REGEX.test(url)) {
+      if (!ghUrl || !GITHUB_REPO_REGEX.test(ghUrl)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           message: 'Repository URL must follow the exact format https://github.com/<owner>/<repo>',
           path: ['repository_url'],
         });
       }
-    } else if (url) {
+    } else if (data.source_type === 'URL') {
+      const targetUrl = data.target_url || ghUrl;
+      if (!targetUrl || (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://'))) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Target URL is required for URL scan and must begin with http:// or https://',
+          path: ['target_url'],
+        });
+      }
+      if (!data.confirmed_ownership) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Target ownership confirmation is required for authorized URL scan',
+          path: ['confirmed_ownership'],
+        });
+      }
+    } else if (ghUrl) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'Repository URL is only allowed when source_type is GITHUB',
@@ -109,9 +127,10 @@ export const UpdateProjectSchema = z
 
 export const CreateScanSchema = z.object({
   project_id: z.string().uuid('Invalid project UUID'),
-  target_type: z.enum(['repo', 'upload', 'demo']),
+  target_type: z.enum(['repo', 'upload', 'demo', 'url']),
   target_path: z.string().min(1, 'Target path or URL is required'),
-  scan_mode: z.enum(['code_only', 'full', 'quick']).default('code_only'),
+  scan_mode: z.enum(['code_only', 'full', 'quick', 'url_only', 'dast']).default('code_only'),
+  confirmed_ownership: z.boolean().optional(),
 });
 
 export const ExplainFindingSchema = z.object({

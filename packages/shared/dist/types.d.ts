@@ -91,6 +91,8 @@ export interface Project {
     source_type: 'ZIP' | 'GITHUB' | 'URL';
     repository_url?: string | null;
     repo_url?: string | null;
+    target_url?: string | null;
+    confirmed_ownership?: boolean;
     framework?: string | null;
     created_at: string;
     updated_at?: string;
@@ -106,6 +108,7 @@ export interface Scan {
     target_path: string;
     storage_path?: string | null;
     workspace_path?: string | null;
+    confirmed_ownership?: boolean;
     result_json?: unknown | null;
     findings_count?: number;
     critical_count?: number;

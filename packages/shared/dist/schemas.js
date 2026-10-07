@@ -39,12 +39,14 @@ exports.CreateProjectSchema = zod_1.z
     source_type: exports.SourceTypeSchema.default('ZIP'),
     repository_url: zod_1.z.string().trim().optional().nullable(),
     repo_url: zod_1.z.string().trim().optional().nullable(), // Backwards compatibility alias
+    target_url: zod_1.z.string().trim().optional().nullable(),
+    confirmed_ownership: zod_1.z.boolean().optional(),
     framework: zod_1.z.string().trim().max(50).optional().nullable(),
 })
     .superRefine((data, ctx) => {
-    const url = data.repository_url || data.repo_url;
+    const ghUrl = data.repository_url || data.repo_url;
     if (data.source_type === 'GITHUB') {
-        if (!url || !GITHUB_REPO_REGEX.test(url)) {
+        if (!ghUrl || !GITHUB_REPO_REGEX.test(ghUrl)) {
             ctx.addIssue({
                 code: zod_1.z.ZodIssueCode.custom,
                 message: 'Repository URL must follow the exact format https://github.com/<owner>/<repo>',
@@ -52,7 +54,24 @@ exports.CreateProjectSchema = zod_1.z
             });
         }
     }
-    else if (url) {
+    else if (data.source_type === 'URL') {
+        const targetUrl = data.target_url || ghUrl;
+        if (!targetUrl || (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://'))) {
+            ctx.addIssue({
+                code: zod_1.z.ZodIssueCode.custom,
+                message: 'Target URL is required for URL scan and must begin with http:// or https://',
+                path: ['target_url'],
+            });
+        }
+        if (!data.confirmed_ownership) {
+            ctx.addIssue({
+                code: zod_1.z.ZodIssueCode.custom,
+                message: 'Target ownership confirmation is required for authorized URL scan',
+                path: ['confirmed_ownership'],
+            });
+        }
+    }
+    else if (ghUrl) {
         ctx.addIssue({
             code: zod_1.z.ZodIssueCode.custom,
             message: 'Repository URL is only allowed when source_type is GITHUB',
@@ -103,9 +122,10 @@ exports.UpdateProjectSchema = zod_1.z
 });
 exports.CreateScanSchema = zod_1.z.object({
     project_id: zod_1.z.string().uuid('Invalid project UUID'),
-    target_type: zod_1.z.enum(['repo', 'upload', 'demo']),
+    target_type: zod_1.z.enum(['repo', 'upload', 'demo', 'url']),
     target_path: zod_1.z.string().min(1, 'Target path or URL is required'),
-    scan_mode: zod_1.z.enum(['code_only', 'full', 'quick']).default('code_only'),
+    scan_mode: zod_1.z.enum(['code_only', 'full', 'quick', 'url_only', 'dast']).default('code_only'),
+    confirmed_ownership: zod_1.z.boolean().optional(),
 });
 exports.ExplainFindingSchema = zod_1.z.object({
     finding_id: zod_1.z.string().uuid('Invalid finding UUID'),

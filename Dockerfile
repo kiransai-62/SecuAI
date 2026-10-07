@@ -7,7 +7,7 @@
 
 FROM node:20-slim
 
-# Install system dependencies: Python 3, pip, venv, git, curl, and certificates
+# Install system dependencies: Python 3, pip, venv, git, curl, certificates, and Chromium/Playwright dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     python3-pip \
@@ -15,6 +15,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     curl \
     ca-certificates \
+    libnss3 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libdrm2 \
+    libxkbcommon0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxrandr2 \
+    libgbm1 \
+    libasound2 \
     && rm -rf /var/lib/apt/lists/*
 
 # Set up Python virtual environment
@@ -25,11 +37,14 @@ ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 # Set up working directory
 WORKDIR /app
 
-# Copy engine sources and install isitsecure (pinned version 0.32.2)
+# Copy engine sources and install isitsecure with browser extra (pinned version 0.32.2)
 COPY engine/isitsecure-src ./engine/isitsecure-src
-RUN pip install --no-cache-dir ./engine/isitsecure-src || \
+RUN pip install --no-cache-dir "./engine/isitsecure-src[browser]" || \
+    pip install --no-cache-dir ./engine/isitsecure-src || \
+    pip install --no-cache-dir isitsecure[browser]==0.32.2 || \
     pip install --no-cache-dir isitsecure==0.32.2 || \
     pip install --no-cache-dir git+https://github.com/jaurakunal/isitsecure.git@v0.32.2
+RUN playwright install chromium || python3 -m playwright install chromium || true
 
 # Copy package manifests first for caching
 COPY package*.json ./
@@ -48,8 +63,8 @@ COPY . .
 RUN npm run build
 
 # Prepare workspace directory and set permissions for non-root user (node)
-RUN mkdir -p /tmp/secuai-workspaces && \
-    chown -R node:node /tmp/secuai-workspaces /app /opt/venv
+RUN mkdir -p /tmp/secuai-workspaces /home/node/.cache && \
+    chown -R node:node /tmp/secuai-workspaces /home/node /app /opt/venv
 
 # Set environment defaults
 ENV NODE_ENV=production

@@ -342,6 +342,8 @@ export const api = {
     description?: string | null;
     source_type: 'ZIP' | 'GITHUB' | 'URL';
     repository_url?: string | null;
+    target_url?: string | null;
+    confirmed_ownership?: boolean;
     framework?: string | null;
   }): Promise<Project> {
     const res = await fetch(`${API_BASE}/projects`, {
@@ -415,7 +417,7 @@ export const api = {
 
   async createProjectScan(
     projectId: string,
-    payload?: { file?: File; repository_url?: string }
+    payload?: { file?: File; repository_url?: string; target_url?: string; confirmed_ownership?: boolean }
   ): Promise<Scan> {
     let res: Response;
     if (payload?.file) {

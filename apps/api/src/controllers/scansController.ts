@@ -4,6 +4,7 @@ import { assertTenantOwnership } from '../middleware/tenant.js';
 import { Scan, Project, FindingRecord } from '@secuai/shared';
 import { uploadScanZip } from '../lib/storage.js';
 import { GITHUB_REPO_REGEX } from '../lib/gitClone.js';
+import { validateDastTarget } from '../lib/dastGuards.js';
 
 export class ScansController {
   /**
@@ -116,7 +117,62 @@ export class ScansController {
       return;
     }
 
-    // 3. Case B: GitHub Repository URL
+    // 3. Case B: Authorized DAST URL Target
+    const targetUrl =
+      req.body?.target_url ||
+      req.body?.url ||
+      (project.source_type === 'URL' ? (project.target_url || project.repository_url) : null);
+
+    if (targetUrl || req.body?.target_type === 'url' || project.source_type === 'URL') {
+      const urlToScan = String(targetUrl || req.body?.target_path || '').trim();
+      const confirmedOwnership = Boolean(req.body?.confirmed_ownership ?? project.confirmed_ownership);
+
+      const validation = await validateDastTarget(urlToScan, confirmedOwnership);
+      if (!validation.valid) {
+        res.status(400).json({ error: validation.error });
+        return;
+      }
+
+      const scanId = crypto.randomUUID();
+      const newScan: Scan = {
+        id: scanId,
+        project_id: projectId,
+        user_id: userId,
+        status: 'QUEUED',
+        scan_mode: req.body?.scan_mode || 'dast',
+        target_type: 'url',
+        target_path: urlToScan,
+        confirmed_ownership: true,
+        storage_path: null,
+        result_json: null,
+        findings_count: 0,
+        critical_count: 0,
+        high_count: 0,
+        medium_count: 0,
+        low_count: 0,
+        security_score: 100,
+        scan_duration_seconds: 0,
+        created_at: new Date().toISOString(),
+      };
+
+      if (db) {
+        const { error: insertError } = await db.from('scans').insert(newScan);
+        if (insertError) {
+          res.status(500).json({ error: insertError.message });
+          return;
+        }
+      } else {
+        memoryDb.scans.set(newScan.id, newScan);
+      }
+
+      res.status(201).json({
+        message: 'Authorized DAST URL scan enqueued.',
+        scan: newScan,
+      });
+      return;
+    }
+
+    // 4. Case C: GitHub Repository URL
     const repoUrl =
       req.body?.repository_url ||
       req.body?.repo_url ||
@@ -125,7 +181,7 @@ export class ScansController {
 
     if (!repoUrl) {
       res.status(400).json({
-        error: 'Either a valid ZIP archive (.zip) or a GitHub repository URL is required to start a scan',
+        error: 'Either a valid ZIP archive (.zip), a GitHub repository URL, or an authorized target URL is required to start a scan',
       });
       return;
     }
@@ -193,14 +249,24 @@ export class ScansController {
 
     if (!assertTenantOwnership(project, userId, res)) return;
 
+    if (target_type === 'url') {
+      const confirmedOwnership = Boolean(req.body?.confirmed_ownership);
+      const validation = await validateDastTarget(String(target_path).trim(), confirmedOwnership);
+      if (!validation.valid) {
+        res.status(400).json({ error: validation.error });
+        return;
+      }
+    }
+
     const newScan: Scan = {
       id: crypto.randomUUID(),
       project_id,
       user_id: userId,
       status: 'QUEUED',
-      scan_mode: scan_mode || 'code_only',
+      scan_mode: scan_mode || (target_type === 'url' ? 'dast' : 'code_only'),
       target_type,
       target_path,
+      confirmed_ownership: target_type === 'url' ? true : undefined,
       result_json: null,
       findings_count: 0,
       critical_count: 0,
