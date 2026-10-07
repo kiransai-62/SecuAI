@@ -23,9 +23,11 @@ import {
   CheckCircle2,
   ArrowRight,
   Upload,
-  X
+  X,
+  TrendingUp
 } from 'lucide-react';
 import { GithubIcon } from '../components/GithubIcon';
+import { ScoreTimelineChart } from '../components/ScoreTimelineChart';
 import { api } from '../services/api';
 import { Project, Scan } from '../types';
 import { Header } from '../components/Header';
@@ -554,6 +556,25 @@ export const ProjectDetailPage: React.FC = () => {
                   </div>
                 </div>
               </div>
+
+              {/* SECTION: Score Timeline Chart */}
+              {scans.length > 0 && (
+                <div className="p-6 md:p-8 rounded-3xl bg-gradient-to-br from-white/[0.04] to-white/[0.01] border border-white/10 shadow-2xl backdrop-blur-xl space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <TrendingUp className="w-4 h-4 text-cyan-400" />
+                      <h2 className="text-base font-bold text-white tracking-tight">
+                        Security Score Timeline
+                      </h2>
+                    </div>
+                    <span className="text-xs font-mono text-slate-400">
+                      Based on {scans.length} scan{scans.length === 1 ? '' : 's'}
+                    </span>
+                  </div>
+
+                  <ScoreTimelineChart scans={scans} />
+                </div>
+              )}
 
               {/* SECTION: Scan History Table (date, score, counts, status) */}
               <div className="space-y-4">

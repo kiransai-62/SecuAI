@@ -18,7 +18,8 @@ import {
   FileArchive, 
   RefreshCw,
   Loader2,
-  Sparkles
+  Sparkles,
+  TrendingUp
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { api } from '../services/api';
@@ -26,6 +27,7 @@ import { Scan, Project, Severity } from '../types';
 import { Header } from '../components/Header';
 import { Sidebar } from '../components/Sidebar';
 import { ScoreRing, getScoreLabel } from '../components/ScoreRing';
+import { ScoreTimelineChart } from '../components/ScoreTimelineChart';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/Toast';
 
@@ -374,6 +376,25 @@ export const DashboardPage: React.FC = () => {
                   </div>
                 </div>
               </div>
+
+              {/* Score Timeline Chart */}
+              {scans.length > 0 && (
+                <div className="p-6 md:p-8 rounded-3xl bg-gradient-to-br from-white/[0.04] to-white/[0.01] border border-white/10 shadow-2xl backdrop-blur-xl space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <TrendingUp className="w-4 h-4 text-cyan-400" />
+                      <h2 className="text-base font-bold text-white tracking-tight">
+                        Security Score Timeline
+                      </h2>
+                    </div>
+                    <span className="text-xs font-mono text-slate-400">
+                      Tracking posture across {scans.length} scan{scans.length === 1 ? '' : 's'}
+                    </span>
+                  </div>
+
+                  <ScoreTimelineChart scans={scans} />
+                </div>
+              )}
 
               {/* Section 2: Recent Scans History Table */}
               <div className="space-y-4">
