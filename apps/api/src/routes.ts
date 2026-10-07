@@ -59,6 +59,7 @@ router.get('/scans', ScansController.list);
 router.post('/scans', validateBody(CreateScanSchema), ScansController.create);
 router.get('/scans/:id/export.json', ScansController.exportJson);
 router.get('/scans/:id/export', ScansController.exportJson);
+router.get('/scans/:id/ai-report', ScansController.getAiReport);
 router.get('/scans/:id', ScansController.getById);
 
 // Findings & Loop Endpoints: DETECT -> EXPLAIN -> FIX -> VERIFY -> RE-SCAN

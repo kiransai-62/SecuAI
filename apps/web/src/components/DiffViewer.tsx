@@ -17,18 +17,18 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({ diffText }) => {
   const lines = diffText.split('\n');
 
   return (
-    <div className="rounded-xl overflow-hidden border border-white/10 bg-[#070a12] text-xs font-mono shadow-inner">
-      <div className="flex items-center justify-between px-4 py-2 bg-slate-900/60 border-b border-white/5">
+    <div className="rounded-xl overflow-hidden border border-slate-800 bg-slate-950 text-xs font-mono shadow-sm">
+      <div className="flex items-center justify-between px-4 py-2 bg-slate-900 border-b border-slate-800">
         <div className="flex items-center space-x-2">
-          <span className="w-2.5 h-2.5 rounded-full bg-cyan-400" />
-          <span className="text-[11px] font-semibold text-slate-300">Unified Patch Diff (Git Format)</span>
+          <span className="w-2.5 h-2.5 rounded-full bg-blue-400" />
+          <span className="text-[11px] font-semibold text-slate-200">Unified Patch Diff (Git Format)</span>
         </div>
         <button
           onClick={handleCopy}
-          className="flex items-center space-x-1 px-2.5 py-1 rounded bg-white/5 hover:bg-white/10 text-slate-300 transition-colors"
+          className="flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700/60 transition-colors"
         >
           {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-slate-400" />}
-          <span className="text-[10px]">{copied ? 'Copied' : 'Copy Patch'}</span>
+          <span className="text-[10px] font-semibold">{copied ? 'Copied' : 'Copy Patch'}</span>
         </button>
       </div>
 

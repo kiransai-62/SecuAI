@@ -71,20 +71,20 @@ export const FindingCard: React.FC<FindingCardProps> = ({
     <div
       className={`rounded-2xl transition-all duration-300 border ${
         isVerified
-          ? 'bg-emerald-950/10 border-emerald-500/30 shadow-[0_0_20px_-10px_rgba(16,185,129,0.2)]'
+          ? 'bg-emerald-50/40 border-emerald-300 shadow-xs'
           : isCritical
-          ? 'bg-[#0b0e18] border-rose-500/25 hover:border-rose-500/40 hover:shadow-[0_0_25px_-10px_rgba(244,63,94,0.15)]'
-          : 'bg-[#0b0e18] border-white/5 hover:border-cyan-500/30 hover:shadow-[0_0_25px_-10px_rgba(6,182,212,0.15)]'
+          ? 'bg-white border-rose-200/80 hover:border-rose-300 shadow-xs'
+          : 'bg-white border-slate-200/80 hover:border-slate-300 shadow-xs'
       }`}
     >
       {/* Top Banner if verified */}
       {isVerified && (
-        <div className="px-5 py-2 bg-emerald-500/10 border-b border-emerald-500/20 flex items-center justify-between text-xs text-emerald-400 font-medium">
+        <div className="px-5 py-2.5 bg-emerald-50 border-b border-emerald-200/80 flex items-center justify-between text-xs text-emerald-700 font-semibold rounded-t-2xl">
           <div className="flex items-center space-x-2">
-            <ShieldCheck className="w-4 h-4 text-emerald-400" />
+            <ShieldCheck className="w-4 h-4 text-emerald-600" />
             <span>Remediation Verified by Scanner: Neutralized</span>
           </div>
-          <span className="font-mono text-[10px] text-emerald-500 uppercase">
+          <span className="font-mono text-[10px] text-emerald-700 uppercase bg-emerald-100/60 px-2 py-0.5 rounded border border-emerald-200">
             {finding.verification_result?.scanner_name || 'isitsecure'}
           </span>
         </div>
@@ -95,7 +95,7 @@ export const FindingCard: React.FC<FindingCardProps> = ({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
           <div className="flex flex-wrap items-center gap-2">
             {/* Severity: Text + Dot */}
-            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-200">
+            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700">
               <span
                 className={`w-2 h-2 rounded-full shrink-0 ${
                   finding.severity === 'CRITICAL'
@@ -112,23 +112,23 @@ export const FindingCard: React.FC<FindingCardProps> = ({
             </span>
 
             {/* Source Badge */}
-            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200/60 font-semibold">
               {finding.source}
             </span>
 
             {/* Category Badge */}
-            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-white/5">
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200/60 font-medium">
               {finding.category}
             </span>
 
             {/* Confidence */}
-            <span className="text-[10px] font-mono text-slate-400">
+            <span className="text-[10px] font-mono text-slate-500">
               Confidence: {Math.round(finding.confidence * 100)}%
             </span>
           </div>
 
           {/* Fingerprint Hash */}
-          <div className="flex items-center space-x-1.5 text-[11px] font-mono text-slate-400 bg-white/[0.02] px-2.5 py-1 rounded-lg border border-white/5 self-start sm:self-auto">
+          <div className="flex items-center space-x-1.5 text-[11px] font-mono text-slate-500 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200/80 self-start sm:self-auto">
             <Fingerprint className="w-3.5 h-3.5 text-slate-400" />
             <span title={finding.fingerprint}>
               {finding.fingerprint.slice(0, 12)}...
@@ -137,45 +137,45 @@ export const FindingCard: React.FC<FindingCardProps> = ({
         </div>
 
         {/* Title */}
-        <h3 className="text-base font-semibold text-white tracking-tight mb-2">
+        <h3 className="text-base font-bold text-slate-900 tracking-tight mb-2">
           {finding.title}
         </h3>
 
         {/* Code Location & Description */}
-        <div className="flex items-center space-x-2 text-xs font-mono text-slate-400 mb-3">
-          <FileCode2 className="w-3.5 h-3.5 text-cyan-400" />
-          <span className="text-cyan-300 font-medium">{finding.file_path || 'Unknown file'}</span>
+        <div className="flex items-center space-x-2 text-xs font-mono text-slate-500 mb-3">
+          <FileCode2 className="w-3.5 h-3.5 text-blue-600" />
+          <span className="text-blue-600 font-semibold">{finding.file_path || 'Unknown file'}</span>
           {finding.line_start && (
-            <span className="text-slate-400">
+            <span className="text-slate-500">
               :{finding.line_start}{finding.line_end ? `-${finding.line_end}` : ''}
             </span>
           )}
           {finding.endpoint && (
             <>
-              <span className="text-slate-600">•</span>
-              <span className="text-purple-300">Route: {finding.endpoint}</span>
+              <span className="text-slate-300">•</span>
+              <span className="text-purple-600 font-medium">Route: {finding.endpoint}</span>
             </>
           )}
         </div>
 
-        <p className="text-xs text-slate-300 leading-relaxed mb-4">
+        <p className="text-xs text-slate-600 leading-relaxed mb-4">
           {finding.description}
         </p>
 
         {/* Interactive Action Bar (DETECT -> EXPLAIN -> FIX -> VERIFY) */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-white/5">
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100">
           <div className="flex flex-wrap items-center gap-2">
             {/* Step 2: Explain Button */}
             <button
               onClick={handleExplain}
               disabled={loadingAction !== null}
-              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all border ${
+              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold tracking-wide transition-all border ${
                 finding.explanation
-                  ? 'bg-purple-500/10 text-purple-300 border-purple-500/30'
-                  : 'bg-white/5 hover:bg-purple-500/20 text-slate-300 hover:text-purple-200 border-white/10'
+                  ? 'bg-purple-50 text-purple-700 border-purple-200/80 shadow-2xs'
+                  : 'bg-white hover:bg-purple-50 text-slate-700 hover:text-purple-700 border-slate-200/80'
               }`}
             >
-              <BrainCircuit className="w-3.5 h-3.5 text-purple-400" />
+              <BrainCircuit className="w-3.5 h-3.5 text-purple-600" />
               <span>{loadingAction === 'explain' ? 'Analyzing...' : finding.explanation ? 'Explanation Ready' : '2. Explain (Gemini)'}</span>
             </button>
 
@@ -183,13 +183,13 @@ export const FindingCard: React.FC<FindingCardProps> = ({
             <button
               onClick={handleProposeDiff}
               disabled={loadingAction !== null}
-              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all border ${
+              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold tracking-wide transition-all border ${
                 finding.proposed_diff
-                  ? 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30'
-                  : 'bg-white/5 hover:bg-cyan-500/20 text-slate-300 hover:text-cyan-200 border-white/10'
+                  ? 'bg-blue-50 text-blue-700 border-blue-200/80 shadow-2xs'
+                  : 'bg-white hover:bg-blue-50 text-slate-700 hover:text-blue-700 border-slate-200/80'
               }`}
             >
-              <Wrench className="w-3.5 h-3.5 text-cyan-400" />
+              <Wrench className="w-3.5 h-3.5 text-blue-600" />
               <span>{loadingAction === 'fix' ? 'Generating Diff...' : finding.proposed_diff ? 'Patch Proposed' : '3. Propose Fix (Diff)'}</span>
             </button>
 
@@ -198,9 +198,9 @@ export const FindingCard: React.FC<FindingCardProps> = ({
               <button
                 onClick={handleVerify}
                 disabled={loadingAction !== null}
-                className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold tracking-wide transition-all bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-[0_0_15px_-3px_rgba(16,185,129,0.4)] active:scale-95"
+                className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold tracking-wide transition-all bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm active:scale-95"
               >
-                <CheckCircle2 className="w-3.5 h-3.5 text-slate-950" />
+                <CheckCircle2 className="w-3.5 h-3.5 text-white" />
                 <span>{loadingAction === 'verify' ? 'Verifying with isitsecure...' : '4. Verify with Scanner'}</span>
               </button>
             )}
@@ -208,10 +208,10 @@ export const FindingCard: React.FC<FindingCardProps> = ({
             {/* Dedicated /findings/:id Page Link */}
             <Link
               to={`/findings/${finding.id || finding.fingerprint}`}
-              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all bg-white/5 hover:bg-cyan-500/10 text-slate-300 hover:text-cyan-300 border border-white/10 hover:border-cyan-500/30"
+              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold tracking-wide transition-all bg-white hover:bg-slate-50 text-slate-700 border border-slate-200/80 shadow-2xs"
               title="Open full structured explanation page"
             >
-              <ExternalLink className="w-3.5 h-3.5 text-cyan-400" />
+              <ExternalLink className="w-3.5 h-3.5 text-slate-500" />
               <span>Full Analysis</span>
             </Link>
           </div>
@@ -219,7 +219,7 @@ export const FindingCard: React.FC<FindingCardProps> = ({
           {/* Toggle Expand */}
           <button
             onClick={() => setIsExpanded(!isExpanded)}
-            className="flex items-center space-x-1 text-xs text-slate-400 hover:text-white transition-colors"
+            className="flex items-center space-x-1 text-xs font-medium text-slate-500 hover:text-slate-800 transition-colors"
           >
             <span>{isExpanded ? 'Hide Details' : 'View Code & Details'}</span>
             {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
@@ -229,15 +229,15 @@ export const FindingCard: React.FC<FindingCardProps> = ({
 
       {/* Expandable Details Drawer */}
       {isExpanded && (
-        <div className="px-5 pb-5 pt-2 border-t border-white/5 space-y-4 bg-black/20 rounded-b-2xl animate-in fade-in duration-200">
+        <div className="px-5 pb-5 pt-3 border-t border-slate-100 space-y-4 bg-slate-50/50 rounded-b-2xl animate-in fade-in duration-200">
           {/* Code Snippet from AST Scanner */}
           {finding.evidence?.code_snippet && (
             <div>
               <div className="flex items-center space-x-2 mb-1.5">
-                <Terminal className="w-3.5 h-3.5 text-cyan-400" />
-                <span className="text-xs font-semibold text-slate-300 font-mono">Original Vulnerable AST Snippet</span>
+                <Terminal className="w-3.5 h-3.5 text-slate-600" />
+                <span className="text-xs font-semibold text-slate-700 font-mono">Original Vulnerable AST Snippet</span>
               </div>
-              <pre className="p-3 rounded-xl bg-[#06080e] border border-white/10 text-xs font-mono text-slate-300 overflow-x-auto max-h-48">
+              <pre className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 text-xs font-mono text-slate-200 overflow-x-auto max-h-48 shadow-inner">
                 <code>{finding.evidence.code_snippet}</code>
               </pre>
             </div>
@@ -245,12 +245,12 @@ export const FindingCard: React.FC<FindingCardProps> = ({
 
           {/* Gemini Root Cause & Blast Radius Explanation */}
           {finding.explanation && (
-            <div className="p-4 rounded-xl bg-purple-950/20 border border-purple-500/25">
-              <div className="flex items-center space-x-2 mb-2 text-purple-300 text-xs font-bold font-mono">
-                <BrainCircuit className="w-4 h-4 text-purple-400" />
+            <div className="p-4 rounded-xl bg-purple-50/70 border border-purple-200/80">
+              <div className="flex items-center space-x-2 mb-2 text-purple-800 text-xs font-bold font-mono">
+                <BrainCircuit className="w-4 h-4 text-purple-600" />
                 <span>Gemini Server-Side Architectural Explanation</span>
               </div>
-              <div className="text-xs text-slate-300 leading-relaxed whitespace-pre-wrap font-sans">
+              <div className="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap font-sans">
                 {finding.explanation}
               </div>
             </div>
@@ -260,12 +260,12 @@ export const FindingCard: React.FC<FindingCardProps> = ({
           {finding.proposed_diff && (
             <div>
               <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center space-x-2 text-cyan-300 text-xs font-bold font-mono">
-                  <Wrench className="w-4 h-4 text-cyan-400" />
+                <div className="flex items-center space-x-2 text-blue-700 text-xs font-bold font-mono">
+                  <Wrench className="w-4 h-4 text-blue-600" />
                   <span>Proposed Git Unified Patch</span>
                 </div>
                 {!isVerified && (
-                  <span className="text-[11px] text-slate-400">
+                  <span className="text-[11px] text-slate-500">
                     Ready to pass through scanner verification rule
                   </span>
                 )}
@@ -276,13 +276,13 @@ export const FindingCard: React.FC<FindingCardProps> = ({
 
           {/* Verification Result from isitsecure */}
           {finding.verification_result && (
-            <div className="p-3.5 rounded-xl bg-emerald-950/25 border border-emerald-500/30 flex items-start space-x-3 text-xs">
-              <ShieldCheck className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" />
+            <div className="p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-200/80 flex items-start space-x-3 text-xs">
+              <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
               <div>
-                <span className="font-semibold text-emerald-300 font-mono">
+                <span className="font-semibold text-emerald-800 font-mono">
                   Scanner Verdict: {finding.verification_result.engine_verdict}
                 </span>
-                <p className="text-slate-300 mt-0.5">
+                <p className="text-slate-700 mt-0.5">
                   {finding.verification_result.message}
                 </p>
               </div>

@@ -1,4 +1,5 @@
 export type Severity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'INFO';
+export type FindingSeverity = Severity;
 export type FindingSource = 'SAST' | 'DAST' | 'SECRETS' | 'DEPS';
 
 export type FindingStatus =

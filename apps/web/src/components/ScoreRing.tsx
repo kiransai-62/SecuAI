@@ -200,7 +200,7 @@ export const ScoreRing: React.FC<ScoreRingProps> = ({
 
         {/* Center score readout */}
         <div className="absolute inset-0 flex flex-col items-center justify-center text-center select-none">
-          <span className={`font-mono font-bold tracking-tight ${dimensions.fontSize} text-white transition-all duration-150 motion-reduce:transition-none`}>
+          <span className={`font-mono font-bold tracking-tight ${dimensions.fontSize} text-slate-900 transition-all duration-150 motion-reduce:transition-none`}>
             {displayScore}
           </span>
           <span className="text-[10px] text-slate-400 font-mono tracking-widest uppercase">

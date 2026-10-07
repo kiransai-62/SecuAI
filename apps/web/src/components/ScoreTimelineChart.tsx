@@ -108,7 +108,7 @@ export const ScoreTimelineChart: React.FC<ScoreTimelineChartProps> = ({
                 y1={y}
                 x2={padding.left + innerWidth}
                 y2={y}
-                stroke="rgba(255, 255, 255, 0.08)"
+                stroke="rgba(148, 163, 184, 0.25)"
                 strokeDasharray={tick === 0 || tick === 100 ? 'none' : '3 3'}
                 strokeWidth={tick === 0 || tick === 100 ? '1' : '0.75'}
               />
@@ -199,7 +199,7 @@ export const ScoreTimelineChart: React.FC<ScoreTimelineChartProps> = ({
                 cy={pt.y}
                 r={isHovered ? 5.5 : 3.5}
                 fill={ptColor}
-                stroke="#090d16"
+                stroke="#ffffff"
                 strokeWidth={isHovered ? 2 : 1.5}
               />
 

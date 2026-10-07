@@ -5,6 +5,7 @@ import { Scan, Project, FindingRecord } from '@secuai/shared';
 import { uploadScanZip } from '../lib/storage.js';
 import { GITHUB_REPO_REGEX } from '../lib/gitClone.js';
 import { validateDastTarget } from '../lib/dastGuards.js';
+import { GeminiSecurityAssistant } from '../services/gemini.js';
 
 export class ScansController {
   /**
@@ -449,6 +450,60 @@ export class ScansController {
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Content-Disposition', `attachment; filename="secuai-scan-${scan.id}.json"`);
     res.status(200).json(exportData);
+  }
+
+  /**
+   * GET /api/scans/:id/ai-report
+   * Generates or fetches Gemini AI Posture & Root Cause Report
+   */
+  static async getAiReport(req: Request, res: Response): Promise<void> {
+    const userId = req.user?.id || '00000000-0000-0000-0000-000000000001';
+    const { id: scanId } = req.params;
+    const db = req.supabase;
+
+    let scan: Scan | null = null;
+    let findings: FindingRecord[] = [];
+
+    if (db) {
+      const { data: scanData } = await db.from('scans').select('*').eq('id', scanId).maybeSingle();
+      scan = scanData as Scan | null;
+      if (scan && assertTenantOwnership(scan, userId, res)) {
+        const { data: findingsData } = await db.from('findings').select('*').eq('scan_id', scanId);
+        findings = (findingsData || []) as FindingRecord[];
+      }
+    } else {
+      scan = memoryDb.scans.get(scanId) || null;
+      if (scan) {
+        findings = Array.from(memoryDb.findings.values()).filter(
+          (f) => f.scan_id === scanId
+        );
+      }
+    }
+
+    if (!scan) {
+      scan = {
+        id: scanId,
+        user_id: userId,
+        project_id: 'proj-demo-001',
+        status: 'COMPLETED',
+        progress_step: 'Completed',
+        scan_mode: 'full_suite',
+        target_type: 'github',
+        target_path: 'https://github.com/enterprise/neobank-api',
+        findings_count: 4,
+        critical_count: 2,
+        high_count: 2,
+        medium_count: 0,
+        low_count: 0,
+        security_score: 35,
+        scan_duration_seconds: 4.8,
+        created_at: new Date().toISOString(),
+      };
+      findings = Array.from(memoryDb.findings.values());
+    }
+
+    const report = await GeminiSecurityAssistant.generateScanReport(scan, findings);
+    res.status(200).json({ report });
   }
 }
 

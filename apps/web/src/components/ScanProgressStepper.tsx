@@ -77,24 +77,24 @@ export const ScanProgressStepper: React.FC<ScanProgressStepperProps> = ({
 
   return (
     <div
-      className="w-full bg-[#0d131f]/80 backdrop-blur-md border border-white/5 rounded-2xl p-6 md:p-8 shadow-xl"
+      className="w-full bg-white border border-slate-200/80 rounded-2xl p-6 md:p-8 shadow-xs"
       aria-live="polite"
       aria-atomic="true"
     >
-      <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 pb-6 border-b border-white/5 gap-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 pb-6 border-b border-slate-100 gap-4">
         <div>
           <div className="flex items-center gap-2.5">
             <span className="relative flex h-3 w-3">
               {!isFailed ? (
                 <>
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-3 w-3 bg-cyan-500" />
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-600" />
                 </>
               ) : (
                 <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-500" />
               )}
             </span>
-            <h2 className="text-lg font-bold text-white font-mono tracking-tight">
+            <h2 className="text-lg font-bold text-slate-900 tracking-tight">
               {isFailed
                 ? 'Scan Execution Failed'
                 : status === 'QUEUED' || status === 'queued'
@@ -102,15 +102,15 @@ export const ScanProgressStepper: React.FC<ScanProgressStepperProps> = ({
                 : 'Security Analysis in Progress'}
             </h2>
           </div>
-          <p className="text-xs text-slate-400 mt-1">
+          <p className="text-xs text-slate-500 mt-1">
             {isFailed
               ? 'Scan was interrupted or encountered an unexpected issue.'
               : `Current phase: ${STEPS[activeStepIdx]?.title} — polling backend every 2s.`}
           </p>
         </div>
 
-        <div className="flex items-center gap-2 font-mono text-xs text-slate-400 bg-white/5 px-3 py-1.5 rounded-lg border border-white/5">
-          <Loader2 className="w-3.5 h-3.5 text-cyan-400 animate-spin" />
+        <div className="flex items-center gap-2 font-mono text-xs text-slate-600 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200/60">
+          <Loader2 className="w-3.5 h-3.5 text-blue-600 animate-spin" />
           <span>Step {Math.min(activeStepIdx + 1, STEPS.length)} of {STEPS.length}</span>
         </div>
       </div>
@@ -121,38 +121,37 @@ export const ScanProgressStepper: React.FC<ScanProgressStepperProps> = ({
           const StepIcon = step.icon;
           const isCompleted = !isFailed && idx < activeStepIdx;
           const isCurrent = !isFailed && idx === activeStepIdx;
-          const isUpcoming = idx > activeStepIdx && !isFailed;
 
           return (
             <div
               key={step.id}
               className={`relative flex flex-col items-center md:items-start p-4 rounded-xl transition-all duration-300 border ${
                 isCurrent
-                  ? 'bg-cyan-500/10 border-cyan-500/40 shadow-[0_0_20px_-3px_rgba(6,182,212,0.3)]'
+                  ? 'bg-blue-50/70 border-blue-300 shadow-sm'
                   : isCompleted
-                  ? 'bg-emerald-500/5 border-emerald-500/20'
-                  : 'bg-white/[0.02] border-white/5 opacity-50'
+                  ? 'bg-emerald-50/50 border-emerald-200/80'
+                  : 'bg-slate-50/70 border-slate-200/60 opacity-60'
               }`}
             >
               <div className="flex items-center gap-3 mb-2 w-full">
                 <div
                   className={`w-8 h-8 rounded-lg flex items-center justify-center border font-mono text-xs ${
                     isCompleted
-                      ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400'
+                      ? 'bg-emerald-100 border-emerald-200 text-emerald-600'
                       : isCurrent
-                      ? 'bg-cyan-500/20 border-cyan-500/50 text-cyan-400 animate-pulse'
-                      : 'bg-white/5 border-white/10 text-slate-400'
+                      ? 'bg-blue-100 border-blue-200 text-blue-600 animate-pulse'
+                      : 'bg-white border-slate-200 text-slate-400'
                   }`}
                 >
                   {isCompleted ? (
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                   ) : isCurrent ? (
-                    <Loader2 className="w-4 h-4 animate-spin text-cyan-400" />
+                    <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
                   ) : (
                     <StepIcon className="w-4 h-4" />
                   )}
                 </div>
-                <span className="font-mono text-[10px] text-slate-400 uppercase tracking-wider">
+                <span className="font-mono text-[10px] text-slate-400 uppercase tracking-wider font-semibold">
                   0{idx + 1}
                 </span>
               </div>
@@ -161,15 +160,15 @@ export const ScanProgressStepper: React.FC<ScanProgressStepperProps> = ({
                 <p
                   className={`text-xs font-semibold tracking-tight ${
                     isCurrent
-                      ? 'text-cyan-300 font-bold'
+                      ? 'text-blue-700 font-bold'
                       : isCompleted
-                      ? 'text-emerald-300'
-                      : 'text-slate-400'
+                      ? 'text-emerald-700'
+                      : 'text-slate-600'
                   }`}
                 >
                   {step.title}
                 </p>
-                <p className="text-[10px] text-slate-400 leading-tight mt-1 line-clamp-2">
+                <p className="text-[10px] text-slate-500 leading-tight mt-1 line-clamp-2">
                   {step.description}
                 </p>
               </div>
@@ -180,8 +179,8 @@ export const ScanProgressStepper: React.FC<ScanProgressStepperProps> = ({
 
       {/* Failure Message Callout */}
       {isFailed && errorMessage && (
-        <div className="mt-6 p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-start gap-3 text-rose-300 text-xs">
-          <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+        <div className="mt-6 p-4 rounded-xl bg-rose-50 border border-rose-200 flex items-start gap-3 text-rose-700 text-xs">
+          <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
           <div>
             <span className="font-bold">Error Notice: </span>
             <span>{errorMessage}</span>
