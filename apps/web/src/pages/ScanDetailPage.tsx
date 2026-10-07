@@ -21,7 +21,8 @@ import {
   ShieldCheck, 
   Wrench,
   BrainCircuit,
-  ExternalLink
+  ExternalLink,
+  Download
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { api } from '../services/api';
@@ -43,6 +44,20 @@ export const ScanDetailPage: React.FC = () => {
   const [severityFilter, setSeverityFilter] = useState<'ALL' | Severity>('ALL');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'OPEN' | 'VERIFIED'>('ALL');
   const [expandedFingerprint, setExpandedFingerprint] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExportJson = async () => {
+    if (!id) return;
+    try {
+      setIsExporting(true);
+      await api.downloadScanJson(id);
+      toast.success('Scan report exported as JSON');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to export scan JSON');
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   // Poll scan details every 2s while QUEUED or RUNNING
   const {
@@ -280,15 +295,32 @@ export const ScanDetailPage: React.FC = () => {
               </button>
 
               {isCompleted && (
-                <button
-                  id="btn-retry-scan-top"
-                  onClick={() => retryMutation.mutate()}
-                  disabled={retryMutation.isPending}
-                  className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 text-xs font-semibold transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500"
-                >
-                  <RefreshCw className="w-3.5 h-3.5 text-cyan-400" />
-                  <span>Scan Again</span>
-                </button>
+                <>
+                  <button
+                    id="btn-export-scan-json"
+                    onClick={handleExportJson}
+                    disabled={isExporting}
+                    className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 text-xs font-semibold transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500"
+                    title="Export Scan Report (JSON)"
+                  >
+                    {isExporting ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-400" />
+                    ) : (
+                      <Download className="w-3.5 h-3.5 text-emerald-400" />
+                    )}
+                    <span>Export JSON</span>
+                  </button>
+
+                  <button
+                    id="btn-retry-scan-top"
+                    onClick={() => retryMutation.mutate()}
+                    disabled={retryMutation.isPending}
+                    className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 text-xs font-semibold transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>Scan Again</span>
+                  </button>
+                </>
               )}
             </div>
           </div>

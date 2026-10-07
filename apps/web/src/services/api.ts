@@ -815,6 +815,55 @@ export const api = {
 
     return await this.retryScan(targetScanId);
   },
+
+  async exportScanJson(scanId: string): Promise<any> {
+    try {
+      const res = await fetch(`${API_BASE}/scans/${scanId}/export.json`, {
+        headers: getAuthHeaders(),
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch {}
+
+    // Fallback demo export payload
+    return {
+      version: '1.0.0',
+      exported_at: new Date().toISOString(),
+      export_type: 'secuai_scan_report',
+      scan: {
+        id: scanId || currentScanState.id,
+        project_id: currentScanState.project_id,
+        status: currentScanState.status,
+        security_score: currentScanState.security_score,
+        counts: {
+          critical: currentScanState.critical_count || 0,
+          high: currentScanState.high_count || 0,
+          medium: currentScanState.medium_count || 0,
+          low: currentScanState.low_count || 0,
+          total: currentScanState.findings_count || 0,
+        },
+        duration_seconds: currentScanState.scan_duration_seconds,
+        created_at: currentScanState.created_at,
+        completed_at: currentScanState.completed_at,
+      },
+      findings_count: localFindingsState.length,
+      findings: localFindingsState,
+    };
+  },
+
+  async downloadScanJson(scanId: string): Promise<void> {
+    const data = await this.exportScanJson(scanId);
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `secuai-scan-${scanId}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  },
 };
 
 

@@ -34,6 +34,8 @@ router.get('/projects/:id/scans', scansController_js_1.ScansController.list);
 // Scans Endpoints
 router.get('/scans', scansController_js_1.ScansController.list);
 router.post('/scans', (0, validate_js_1.validateBody)(shared_1.CreateScanSchema), scansController_js_1.ScansController.create);
+router.get('/scans/:id/export.json', scansController_js_1.ScansController.exportJson);
+router.get('/scans/:id/export', scansController_js_1.ScansController.exportJson);
 router.get('/scans/:id', scansController_js_1.ScansController.getById);
 // Findings & Loop Endpoints: DETECT -> EXPLAIN -> FIX -> VERIFY -> RE-SCAN
 router.get('/scans/:scanId/findings', findingsController_js_1.FindingsController.listByScan);

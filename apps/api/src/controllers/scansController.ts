@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { memoryDb } from '../db/supabase.js';
 import { assertTenantOwnership } from '../middleware/tenant.js';
-import { Scan, Project } from '@secuai/shared';
+import { Scan, Project, FindingRecord } from '@secuai/shared';
 import { uploadScanZip } from '../lib/storage.js';
 import { GITHUB_REPO_REGEX } from '../lib/gitClone.js';
 
@@ -268,6 +268,121 @@ export class ScansController {
       score,
       counts,
     });
+  }
+
+  /**
+   * GET /api/scans/:id/export.json
+   * RLS-scoped JSON export of a complete scan with project and finding details.
+   */
+  static async exportJson(req: Request, res: Response): Promise<void> {
+    const userId = req.user!.id;
+    const { id: scanId } = req.params;
+    const db = req.supabase;
+
+    let scan: Scan | null = null;
+    let project: Project | null = null;
+    let findings: FindingRecord[] = [];
+
+    if (db) {
+      // Scoped under RLS via per-request supabase client
+      const { data: scanData, error: scanErr } = await db
+        .from('scans')
+        .select('*')
+        .eq('id', scanId)
+        .maybeSingle();
+
+      if (scanErr || !scanData) {
+        res.status(404).json({ error: 'Scan not found' });
+        return;
+      }
+      scan = scanData as Scan;
+
+      const { data: projData } = await db
+        .from('projects')
+        .select('*')
+        .eq('id', scan.project_id)
+        .maybeSingle();
+      project = projData as Project | null;
+
+      const { data: findingsData } = await db
+        .from('findings')
+        .select('*')
+        .eq('scan_id', scanId)
+        .order('created_at', { ascending: false });
+      findings = (findingsData as FindingRecord[]) || [];
+    } else {
+      scan = memoryDb.scans.get(scanId) || null;
+      if (!scan) {
+        res.status(404).json({ error: 'Scan not found' });
+        return;
+      }
+
+      if (!assertTenantOwnership(scan, userId, res)) return;
+
+      project = memoryDb.projects.get(scan.project_id) || null;
+      findings = Array.from(memoryDb.findings.values()).filter(
+        (f) => f.scan_id === scanId && f.user_id === userId
+      );
+    }
+
+    if (!assertTenantOwnership(scan, userId, res)) return;
+
+    const exportData = {
+      version: '1.0.0',
+      exported_at: new Date().toISOString(),
+      export_type: 'secuai_scan_report',
+      scan: {
+        id: scan.id,
+        project_id: scan.project_id,
+        status: scan.status,
+        progress_step: scan.progress_step,
+        security_score: scan.security_score,
+        target_type: scan.target_type,
+        target_path: scan.target_path,
+        counts: {
+          critical: scan.critical_count ?? 0,
+          high: scan.high_count ?? 0,
+          medium: scan.medium_count ?? 0,
+          low: scan.low_count ?? 0,
+          total: scan.findings_count ?? 0,
+        },
+        duration_seconds: scan.scan_duration_seconds,
+        created_at: scan.created_at,
+        completed_at: scan.completed_at,
+      },
+      project: project
+        ? {
+            id: project.id,
+            name: project.name,
+            description: project.description,
+            framework: project.framework,
+            source_type: project.source_type,
+            repository_url: project.repository_url,
+          }
+        : null,
+      findings_count: findings.length,
+      findings: findings.map((f) => ({
+        id: f.id,
+        fingerprint: f.fingerprint,
+        title: f.title,
+        category: f.category,
+        severity: f.severity,
+        confidence: f.confidence,
+        status: f.status,
+        source: f.source,
+        file_path: f.file_path,
+        line_start: f.line_start,
+        line_end: f.line_end,
+        endpoint: f.endpoint,
+        description: f.description,
+        evidence: f.evidence,
+        created_at: f.created_at,
+      })),
+    };
+
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="secuai-scan-${scan.id}.json"`);
+    res.status(200).json(exportData);
   }
 }
 
