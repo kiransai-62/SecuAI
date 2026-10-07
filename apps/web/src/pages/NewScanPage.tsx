@@ -69,7 +69,7 @@ export const NewScanPage: React.FC = () => {
   const [targetType, setTargetType] = useState<'GIT' | 'ZIP' | 'URL'>('GIT');
   const [scanProfile, setScanProfile] = useState<'full' | 'sast' | 'dast' | 'secrets'>('full');
   
-  const [repoUrl, setRepoUrl] = useState('https://github.com/enterprise/neobank-api');
+  const [repoUrl, setRepoUrl] = useState('https://github.com/kiransai-62/SecuAI');
   const [branch, setBranch] = useState('main');
   const [targetUrl, setTargetUrl] = useState('https://staging-api.neobank.internal');
   const [confirmedOwnership, setConfirmedOwnership] = useState(true);
@@ -80,7 +80,7 @@ export const NewScanPage: React.FC = () => {
   const { user, loginWithOAuth } = useAuth();
   const [githubPat, setGithubPat] = useState(() => localStorage.getItem('secuai_github_pat') || '');
   const [connectedGithubUser, setConnectedGithubUser] = useState<string | null>(() => {
-    return localStorage.getItem('secuai_github_username') || null;
+    return localStorage.getItem('secuai_github_username') || 'kiransai-62';
   });
   const [isPatSaved, setIsPatSaved] = useState(() => Boolean(localStorage.getItem('secuai_github_pat')));
 
@@ -90,8 +90,10 @@ export const NewScanPage: React.FC = () => {
       setConnectedGithubUser(savedUser);
     } else if (user?.user_metadata?.user_name || user?.app_metadata?.provider === 'github') {
       if (!localStorage.getItem('secuai_github_disconnected')) {
-        setConnectedGithubUser(user?.user_metadata?.user_name || user?.email?.split('@')[0] || 'github-user');
+        setConnectedGithubUser(user?.user_metadata?.user_name || user?.email?.split('@')[0] || 'kiransai-62');
       }
+    } else if (!localStorage.getItem('secuai_github_disconnected')) {
+      setConnectedGithubUser('kiransai-62');
     }
   }, [user]);
 
