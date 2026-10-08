@@ -35,48 +35,7 @@ export const HistoryPage: React.FC = () => {
     queryFn: () => api.getAllScans(),
   });
 
-  // Demo scan history records for rich timeline presentation if fewer exist
-  const scanHistory: (Scan & { trigger?: string; branch?: string })[] = [
-    ...scans,
-    {
-      id: 'scan-demo-002',
-      project_id: 'proj-demo-001',
-      status: 'COMPLETED',
-      progress_step: 'Completed',
-      scan_mode: 'full_suite',
-      target_type: 'github',
-      target_path: 'https://github.com/enterprise/neobank-api',
-      findings_count: 2,
-      critical_count: 0,
-      high_count: 1,
-      medium_count: 1,
-      low_count: 0,
-      security_score: 78,
-      scan_duration_seconds: 5.2,
-      created_at: new Date(Date.now() - 3600000 * 5).toISOString(),
-      trigger: 'Pull Request #42 (fix/rls-policy)',
-      branch: 'fix/rls-policy',
-    },
-    {
-      id: 'scan-demo-003',
-      project_id: 'proj-demo-001',
-      status: 'COMPLETED',
-      progress_step: 'Completed',
-      scan_mode: 'dast_only',
-      target_type: 'url',
-      target_path: 'https://staging-api.neobank.internal',
-      findings_count: 0,
-      critical_count: 0,
-      high_count: 0,
-      medium_count: 0,
-      low_count: 0,
-      security_score: 95,
-      scan_duration_seconds: 7.1,
-      created_at: new Date(Date.now() - 3600000 * 26).toISOString(),
-      trigger: 'Nightly Scheduled Cron',
-      branch: 'main',
-    },
-  ];
+  const scanHistory: (Scan & { trigger?: string; branch?: string })[] = scans;
 
   // Deduplicate by ID
   const uniqueScans = Array.from(new Map(scanHistory.map(s => [s.id, s])).values());

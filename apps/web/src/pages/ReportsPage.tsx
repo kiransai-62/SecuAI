@@ -20,14 +20,28 @@ import { Header } from '../components/Header';
 import { api } from '../services/api';
 import { useToast } from '../components/Toast';
 
+import { useQuery } from '@tanstack/react-query';
+import { Scan } from '../types';
+
 export const ReportsPage: React.FC = () => {
   const navigate = useNavigate();
   const toast = useToast();
 
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
-  const [selectedScanId] = useState('scan-demo-001');
+
+  const { data: scans = [] } = useQuery<Scan[]>({
+    queryKey: ['scans'],
+    queryFn: () => api.getAllScans(),
+  });
+
+  const selectedScan = scans[0] || null;
+  const selectedScanId = selectedScan?.id || '';
 
   const handleDownloadJson = async () => {
+    if (!selectedScanId) {
+      toast.error('No scan records available to export.');
+      return;
+    }
     try {
       await api.downloadScanJson(selectedScanId);
       toast.success('Full compliance JSON package downloaded');
@@ -132,13 +146,21 @@ export const ReportsPage: React.FC = () => {
                 {/* Score Big Meter */}
                 <div className="flex items-center space-x-4 bg-[#F8FAFD] border border-slate-200/80 rounded-2xl p-4 shrink-0">
                   <div className="w-16 h-16 rounded-2xl bg-white border border-slate-200 flex flex-col items-center justify-center shadow-2xs">
-                    <span className="text-2xl font-black text-[#2563EB] tracking-tight">85</span>
+                    <span className="text-2xl font-black text-[#2563EB] tracking-tight">{selectedScan?.security_score ?? 100}</span>
                     <span className="text-[10px] text-slate-400 font-semibold uppercase">/ 100</span>
                   </div>
                   <div>
-                    <div className="text-xs font-bold text-slate-900">Health Rating: Robust</div>
-                    <div className="text-[11px] text-emerald-600 font-semibold mt-0.5">+15 points from auto-fix</div>
-                    <div className="text-[10px] text-slate-400 mt-1">Audit hash: 9d8f...3a2b</div>
+                    <div className="text-xs font-bold text-slate-900">
+                      {selectedScan ? `Status: ${selectedScan.status}` : 'No scan records'}
+                    </div>
+                    <div className="text-[11px] text-slate-500 font-medium mt-0.5">
+                      {selectedScan ? `${selectedScan.findings_count} findings detected` : 'Ready to scan'}
+                    </div>
+                    {selectedScan && (
+                      <div className="text-[10px] text-slate-400 mt-1 font-mono">
+                        Scan ID: {selectedScan.id.slice(0, 12)}...
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

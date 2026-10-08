@@ -123,6 +123,8 @@ export interface Scan {
   started_at?: string;
   completed_at?: string;
   error?: string | null;
+  discovery_summary?: any;
+  result_json?: any;
   created_at: string;
 }
 

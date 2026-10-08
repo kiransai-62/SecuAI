@@ -8,6 +8,7 @@ const router = Router();
 
 router.use(authMiddleware);
 
+router.get('/', FindingsController.listAll);
 router.get('/:id', FindingsController.getById);
 router.get('/:id/analysis', FindingsController.getAiAnalysisById);
 router.post('/:id/explain', FindingsController.explainById);

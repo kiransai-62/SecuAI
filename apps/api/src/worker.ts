@@ -3,8 +3,17 @@ import os from 'os';
 import path from 'path';
 import crypto from 'crypto';
 import { serviceRoleSupabase, memoryDb } from './db/supabase.js';
-import { runScan, normalizeReport, EngineScannerRunner } from '@secuai/engine-adapter';
 import { Scan, FindingRecord, Finding, RawIsItSecureReport, calculateSecurityScore, computeSecurityScore } from '@secuai/shared';
+import { 
+  runScan, 
+  normalizeReport, 
+  EngineScannerRunner,
+  UnifiedScanPipeline, 
+  GitHubScannerAdapter, 
+  WebScannerAdapter, 
+  NormalizedFinding, 
+  DiscoverySummary 
+} from '@secuai/engine-adapter';
 import { safeExtractZip } from './lib/safeExtract.js';
 import { cloneGitHubRepo } from './lib/gitClone.js';
 import { getScanZipBuffer } from './lib/storage.js';
@@ -243,7 +252,7 @@ function detectProjectFramework(workspacePath: string): string {
 export { computeSecurityScore, calculateSecurityScore };
 
 /**
- * Executes a single scan job through all 6 required progress steps.
+ * Executes a single scan job through all required progress steps with UnifiedScanPipeline.
  */
 export async function processScanJob(scan: Scan): Promise<void> {
   const scanId = scan.id;
@@ -266,130 +275,54 @@ export async function processScanJob(scan: Scan): Promise<void> {
         (scan.target_type !== 'upload' &&
           Boolean(scan.target_path?.startsWith('http://') || scan.target_path?.startsWith('https://'))));
 
-    let findings: Finding[] = [];
+    let findings: NormalizedFinding[] = [];
+    let discoverySummary: DiscoverySummary | null = null;
     let scanResultJson: unknown = null;
     let scanDurationSeconds = 0;
 
     if (isUrlScan) {
-      const dastStartTime = Date.now();
-
       // Step 1: Preparing
       await updateScanState(scanId, {
         progress_step: 'Preparing',
       });
 
-      // 1. Re-validate DNS and SSRF guards at connect time
-      const validation = await validateDastTarget(
+      // Validate URL security (SSRF, protocol, reachability)
+      const secCheck = await WebScannerAdapter.validateUrlSecurity(
         scan.target_path,
-        Boolean(scan.confirmed_ownership ?? true)
+        process.env.NODE_ENV === 'test' || Boolean(process.env.ALLOW_LOCAL_DAST)
       );
-      if (!validation.valid) {
-        throw new Error(`DAST Target Security Validation Failed: ${validation.error}`);
+      if (!secCheck.valid) {
+        throw new Error(`SSRF Guard Violation: ${secCheck.error}`);
       }
 
-      // 2. Pre-flight engine check: Stop and report instead of faking results
-      const browserCheck = await checkDastBrowserAvailable();
-      if (!browserCheck.available) {
-        throw new Error(
-          `DAST engine cannot run in this environment: ${browserCheck.reason}. Scan stopped without faking results.`
-        );
-      }
-
-      // Step 2: Detecting project
+      // Step 2: Detecting project / endpoint discovery
       await updateScanState(scanId, {
         progress_step: 'Detecting project',
       });
 
-      // Step 3: Scanning (Probe live endpoint with 5 min timeout, rate cap, max 3 redirects)
+      // Step 3: Scanning live endpoint
       await updateScanState(scanId, {
         progress_step: 'Scanning',
       });
 
-      const probeResult = await executeSafeDastProbe(
-        scan.target_path,
-        Boolean(scan.confirmed_ownership ?? true),
-        {
-          maxRedirects: 3,
-          timeoutMs: 300000, // 5 min timeout
-          delayBetweenRequestsMs: 200,
-        }
-      );
+      const scanResult = await UnifiedScanPipeline.executeScan({
+        targetType: 'URL',
+        targetUrl: scan.target_path,
+        confirmedOwnership: Boolean(scan.confirmed_ownership ?? true),
+        workspacePath,
+      });
 
-      // Step 4: Normalizing findings (source=DAST)
+      findings = scanResult.findings;
+      discoverySummary = scanResult.discovery;
+      scanResultJson = scanResult;
+      scanDurationSeconds = scanResult.durationSeconds;
+
+      // Step 4: Normalizing
       await updateScanState(scanId, {
         progress_step: 'Normalizing',
       });
-
-      const headers = probeResult.headers;
-      if (!headers['content-security-policy']) {
-        findings.push(
-          normalizeDastFinding({
-            title: 'Missing Content-Security-Policy header on live endpoint',
-            category: 'missing_security_headers',
-            severity: 'MEDIUM',
-            confidence: 0.95,
-            endpoint: probeResult.finalUrl,
-            description: `The live endpoint '${probeResult.finalUrl}' does not return a Content-Security-Policy (CSP) header, increasing exposure to cross-site scripting (XSS) and data injection.`,
-            evidence: {
-              scanner_name: 'dast_header_analyzer',
-              status_code: probeResult.statusCode,
-              headers: probeResult.headers,
-              redirects_followed: probeResult.redirectsFollowed,
-            },
-          })
-        );
-      }
-
-      if (!headers['strict-transport-security'] && probeResult.finalUrl.startsWith('https://')) {
-        findings.push(
-          normalizeDastFinding({
-            title: 'Missing Strict-Transport-Security (HSTS) header',
-            category: 'missing_security_headers',
-            severity: 'LOW',
-            confidence: 0.95,
-            endpoint: probeResult.finalUrl,
-            description: `The live HTTPS endpoint does not enforce HSTS, permitting potential man-in-the-middle downgrade attacks.`,
-            evidence: {
-              scanner_name: 'dast_hsts_analyzer',
-              status_code: probeResult.statusCode,
-              headers: probeResult.headers,
-            },
-          })
-        );
-      }
-
-      if (headers['access-control-allow-origin'] === '*') {
-        findings.push(
-          normalizeDastFinding({
-            title: 'Overly permissive CORS wildcard (Access-Control-Allow-Origin: *)',
-            category: 'cors_misconfiguration',
-            severity: 'HIGH',
-            confidence: 0.9,
-            endpoint: probeResult.finalUrl,
-            description: `The live API endpoint sets Access-Control-Allow-Origin to '*', allowing any third-party origin to read cross-origin responses.`,
-            evidence: {
-              scanner_name: 'dast_cors_analyzer',
-              status_code: probeResult.statusCode,
-              headers: probeResult.headers,
-            },
-          })
-        );
-      }
-
-      scanDurationSeconds = Math.max(1, Math.round((Date.now() - dastStartTime) / 1000));
-      scanResultJson = {
-        target_url: probeResult.finalUrl,
-        status_code: probeResult.statusCode,
-        headers: probeResult.headers,
-        redirects_followed: probeResult.redirectsFollowed,
-        findings_count: findings.length,
-        scan_duration_seconds: scanDurationSeconds,
-        scanners_run: ['dast_header_analyzer', 'dast_hsts_analyzer', 'dast_cors_analyzer'],
-      };
     } else {
-      // --------------------------------------------------------------------------
-      // Step 1: Preparing
-      // --------------------------------------------------------------------------
+      // Step 1: Preparing workspace
       await updateScanState(scanId, {
         progress_step: 'Preparing',
         workspace_path: workspacePath,
@@ -401,85 +334,68 @@ export async function processScanJob(scan: Scan): Promise<void> {
       if (fs.existsSync(workspacePath)) {
         fs.rmSync(workspacePath, { recursive: true, force: true });
       }
-      fs.mkdirSync(workspacePath, { recursive: true });
 
-      // Workspace extraction (ZIP) or clone (GitHub)
-      // NEVER run npm install or user code
       if (scan.target_type === 'upload' || scan.storage_path) {
+        fs.mkdirSync(workspacePath, { recursive: true });
         const storagePath = scan.storage_path || scan.target_path;
         const zipBuffer = await getScanZipBuffer(storagePath, serviceRoleSupabase || undefined);
         if (!zipBuffer) {
           throw new Error(`Upload archive not found in storage: ${storagePath}`);
         }
         await safeExtractZip(zipBuffer, workspacePath);
-      } else if (
-        scan.target_type === 'repo' ||
-        scan.target_type === 'GITHUB' ||
-        scan.target_type === 'github' ||
-        scan.target_path?.startsWith('https://github.com')
-      ) {
-        await cloneGitHubRepo(scan.target_path, workspacePath);
+      } else if (isGitHubScan) {
+        await GitHubScannerAdapter.clone(scan.target_path, workspacePath, 60000);
       } else if (fs.existsSync(scan.target_path)) {
-        // Local path copying for test fixtures/demo directories
+        fs.mkdirSync(workspacePath, { recursive: true });
         fs.cpSync(scan.target_path, workspacePath, { recursive: true });
       } else {
         throw new Error(`Unsupported scan target: ${scan.target_path}`);
       }
 
-      // Initialize git repository in workspace at extract time for git apply workflows
       initWorkspaceGit(workspacePath);
 
-      // --------------------------------------------------------------------------
       // Step 2: Detecting project
-      // --------------------------------------------------------------------------
       await updateScanState(scanId, {
         progress_step: 'Detecting project',
       });
 
-      const framework = detectProjectFramework(workspacePath);
-      if (serviceRoleSupabase) {
-        try {
-          await serviceRoleSupabase
-            .from('projects')
-            .update({ framework })
-            .eq('id', scan.project_id)
-            .is('framework', null);
-        } catch {}
-      } else {
-        const p = memoryDb.projects.get(scan.project_id);
-        if (p && !p.framework) p.framework = framework;
-      }
-
-      // --------------------------------------------------------------------------
       // Step 3: Scanning
-      // --------------------------------------------------------------------------
       await updateScanState(scanId, {
         progress_step: 'Scanning',
       });
 
-      let rawReport: RawIsItSecureReport;
-      try {
-        rawReport = await runScan(workspacePath, { timeoutMs: 60000 });
-      } catch (engineErr: any) {
-        console.warn(`[SecuAI Worker] runScan adapter notice: ${engineErr.message}. Checking engine fallback.`);
-        rawReport = await EngineScannerRunner.runScan({
-          targetPath: workspacePath,
-          scanMode: scan.scan_mode || 'code_only',
-          timeoutMs: 60000,
-        });
+      const scanResult = await UnifiedScanPipeline.executeScan({
+        targetType: isGitHubScan ? 'REPO' : 'LOCAL',
+        repoUrl: isGitHubScan ? scan.target_path : undefined,
+        targetPath: workspacePath,
+        workspacePath,
+      });
+
+      findings = scanResult.findings;
+      discoverySummary = scanResult.discovery;
+      scanResultJson = scanResult;
+      scanDurationSeconds = scanResult.durationSeconds;
+
+      if (discoverySummary && discoverySummary.frameworks.length > 0) {
+        const detectedFramework = discoverySummary.frameworks.join(' / ');
+        if (serviceRoleSupabase) {
+          try {
+            await serviceRoleSupabase
+              .from('projects')
+              .update({ framework: detectedFramework })
+              .eq('id', scan.project_id)
+              .is('framework', null);
+          } catch {}
+        } else {
+          const p = memoryDb.projects.get(scan.project_id);
+          if (p && !p.framework) p.framework = detectedFramework;
+        }
       }
 
-      // --------------------------------------------------------------------------
-      // Step 4: Normalizing & Regression Detection
-      // --------------------------------------------------------------------------
+      // Step 4: Normalizing
       await updateScanState(scanId, {
         progress_step: 'Normalizing',
       });
-
-      const normalized = normalizeReport(rawReport);
-      findings = normalized.findings;
-      scanResultJson = rawReport;
-      scanDurationSeconds = rawReport.scan_duration_seconds || 0;
     }
 
     // Regression Check:
@@ -523,21 +439,20 @@ export async function processScanJob(scan: Scan): Promise<void> {
         title: f.title,
         category: f.category,
         severity: f.severity,
-        confidence: f.confidence,
+        confidence: f.confidence === 'HIGH' ? 0.95 : f.confidence === 'MEDIUM' ? 0.8 : 0.6,
         source: f.source,
-        file_path: f.file_path,
-        line_start: f.line_start,
-        line_end: f.line_end,
+        file_path: f.filePath,
+        line_start: f.lineStart,
+        line_end: f.lineEnd,
         endpoint: f.endpoint,
         evidence: f.evidence,
         status: findingStatus,
         description: f.description,
         engine_finding_id: f.fingerprint,
-        technical_detail: (f.evidence as any)?.technical_detail || '',
-        scanner_name: (f.evidence as any)?.scanner_name || '',
-        line_number: f.line_start,
-        code_snippet: (f.evidence as any)?.code_snippet || null,
-        raw_finding: f as any,
+        technical_detail: f.evidence.technical_detail || f.description,
+        scanner_name: f.evidence.scanner_name || 'secuai_analyzer',
+        line_number: f.lineStart,
+        code_snippet: f.evidence.code_snippet || null,
         created_at: nowIso,
         updated_at: nowIso,
       };
@@ -572,18 +487,14 @@ export async function processScanJob(scan: Scan): Promise<void> {
       }
     }
 
-    // --------------------------------------------------------------------------
     // Step 5: Scoring (Updated via recomputeScan)
-    // --------------------------------------------------------------------------
     await updateScanState(scanId, {
       progress_step: 'Scoring',
     });
 
     const scoreMetrics = await recomputeScan(scanId);
 
-    // --------------------------------------------------------------------------
     // Step 6: Done (COMPLETED)
-    // --------------------------------------------------------------------------
     const completedAt = new Date().toISOString();
     await updateScanState(scanId, {
       status: 'COMPLETED',
@@ -594,10 +505,11 @@ export async function processScanJob(scan: Scan): Promise<void> {
       low_count: scoreMetrics.counts.low,
       findings_count: scoreMetrics.counts.total,
       security_score: scoreMetrics.score,
+      discovery_summary: discoverySummary,
       result_json: scanResultJson,
       scan_duration_seconds: scanDurationSeconds,
       completed_at: completedAt,
-      workspace_path: workspacePath, // Kept for apply-fix/verify; TTL cleanup after 24h
+      workspace_path: workspacePath,
     });
 
     console.log(

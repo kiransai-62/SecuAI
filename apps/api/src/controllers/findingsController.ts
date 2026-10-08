@@ -5,13 +5,13 @@ import crypto from 'crypto';
 import { Request, Response } from 'express';
 import { memoryDb } from '../db/supabase.js';
 import { assertTenantOwnership } from '../middleware/tenant.js';
-import { GeminiSecurityAssistant } from '../services/gemini.js';
-import { EngineVerifier } from '@secuai/engine-adapter';
+import { EngineVerifier, PatchVerifier } from '@secuai/engine-adapter';
 import { FindingRecord, Scan } from '@secuai/shared';
 import { recomputeScan } from '../services/recomputeScan.js';
 import { config } from '../config.js';
 import { WORKSPACE_BASE_DIR } from '../worker.js';
 import { initWorkspaceGit, validateGitDiff, applyGitDiff } from '../lib/gitWorkspace.js';
+import { GeminiSecurityAssistant } from '../services/gemini.js';
 
 const userRateLimits = new Map<string, { count: number; resetAt: number }>();
 
@@ -90,6 +90,80 @@ export class FindingsController {
     let findings = Array.from(memoryDb.findings.values()).filter(
       (f) => f.scan_id === scanId && f.user_id === userId
     );
+
+    if (severityFilter && severityFilter.toUpperCase() !== 'ALL') {
+      const severities = severityFilter.split(',').map((s) => s.trim().toUpperCase());
+      findings = findings.filter((f) => severities.includes(f.severity.toUpperCase()));
+    }
+
+    if (statusFilter && statusFilter.toUpperCase() !== 'ALL') {
+      const statuses = statusFilter.split(',').map((s) => s.trim().toUpperCase());
+      findings = findings.filter((f) => {
+        const s = (f.status || 'OPEN').toUpperCase();
+        if (statuses.includes('OPEN') && (s === 'OPEN' || s === 'DETECTED')) return true;
+        if (statuses.includes('VERIFIED') && s === 'VERIFIED') return true;
+        return statuses.includes(s);
+      });
+    }
+
+    res.json({ findings });
+  }
+
+  /**
+   * GET /api/findings
+   * Lists all findings belonging to the authenticated user across projects/scans,
+   * supporting optional query filters (projectId, scanId, severity, status).
+   */
+  static async listAll(req: Request, res: Response): Promise<void> {
+    const userId = req.user!.id;
+    const { projectId, scanId, severity, status } = req.query;
+    const db = req.supabase;
+
+    const severityFilter = severity ? String(severity).trim() : null;
+    const statusFilter = status ? String(status).trim() : null;
+    const projectFilter = projectId ? String(projectId).trim() : null;
+    const scanFilter = scanId ? String(scanId).trim() : null;
+
+    if (db) {
+      let query = db
+        .from('findings')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+
+      if (projectFilter) query = query.eq('project_id', projectFilter);
+      if (scanFilter) query = query.eq('scan_id', scanFilter);
+
+      if (severityFilter && severityFilter.toUpperCase() !== 'ALL') {
+        const severities = severityFilter.split(',').map((s) => s.trim().toUpperCase());
+        if (severities.length === 1) {
+          query = query.eq('severity', severities[0]);
+        } else {
+          query = query.in('severity', severities);
+        }
+      }
+
+      if (statusFilter && statusFilter.toUpperCase() !== 'ALL') {
+        const statuses = statusFilter.split(',').map((s) => s.trim().toUpperCase());
+        if (statuses.length === 1) {
+          query = query.eq('status', statuses[0]);
+        } else {
+          query = query.in('status', statuses);
+        }
+      }
+
+      const { data, error } = await query;
+      if (error) {
+        res.status(500).json({ error: error.message });
+        return;
+      }
+      res.json({ findings: data || [] });
+      return;
+    }
+
+    let findings = Array.from(memoryDb.findings.values()).filter((f) => f.user_id === userId);
+    if (projectFilter) findings = findings.filter((f) => f.project_id === projectFilter);
+    if (scanFilter) findings = findings.filter((f) => f.scan_id === scanFilter);
 
     if (severityFilter && severityFilter.toUpperCase() !== 'ALL') {
       const severities = severityFilter.split(',').map((s) => s.trim().toUpperCase());
@@ -485,7 +559,7 @@ export class FindingsController {
       memoryDb.ai_analysis.set(cacheKey, existing);
 
       finding.status = 'FIX_PROPOSED';
-      finding.proposed_diff = finalDiff;
+      finding.proposed_diff = finalDiff || undefined;
     }
 
     res.json({
@@ -709,11 +783,52 @@ export class FindingsController {
 
     let verificationResult: any;
     try {
-      // 1. Engine's per-finding verification (see P1 notes)
-      verificationResult = EngineVerifier.verifyPatch(
-        (finding.raw_finding || finding) as any,
-        diffToVerify || ''
-      );
+      if (diffToVerify !== null && typeof diffToVerify === 'string') {
+        if (diffToVerify.trim().length === 0) {
+          verificationResult = {
+            verified: false,
+            engine_verdict: 'INCONCLUSIVE',
+            scanner_name: finding.scanner_name || finding.source || 'scanner',
+            verification_time: new Date().toISOString(),
+            message: 'Scanner verification inconclusive: No applied patch or diff available to evaluate.',
+            evidence_text: 'Scanner verification inconclusive: No applied patch or diff available to evaluate.',
+          };
+        } else {
+          // Explicit diff provided in request body - verify diff directly
+          verificationResult = EngineVerifier.verifyPatch(
+            (finding.raw_finding || finding) as any,
+            diffToVerify
+          );
+        }
+      } else if (fs.existsSync(workspacePath) && finding.file_path && fs.existsSync(path.join(workspacePath, finding.file_path))) {
+        // Workspace file exists - verify the modified file on disk
+        const pvRes = await PatchVerifier.verifyFindingPatch(workspacePath, {
+          fingerprint: finding.fingerprint,
+          file_path: finding.file_path,
+          category: finding.category,
+          title: finding.title,
+          status: finding.status,
+          rule_id: (finding.evidence as any)?.rule_id || (finding.raw_finding as any)?.rule_id,
+        } as any);
+        verificationResult = {
+          verified: pvRes.verified,
+          engine_verdict: pvRes.verdict === 'VERIFIED' ? 'PASSED' : (pvRes.verdict === 'FAILED' ? 'FAILED' : 'INCONCLUSIVE'),
+          scanner_name: pvRes.scanner_name,
+          verification_time: new Date().toISOString(),
+          message: pvRes.message,
+          evidence_text: pvRes.message,
+          evidence: pvRes.evidence,
+        };
+      } else {
+        verificationResult = {
+          verified: false,
+          engine_verdict: 'INCONCLUSIVE',
+          scanner_name: finding.scanner_name || finding.source || 'scanner',
+          verification_time: new Date().toISOString(),
+          message: 'No diff or workspace file available to verify.',
+          evidence_text: 'No diff or workspace file available to verify.',
+        };
+      }
     } catch (err: any) {
       verificationResult = {
         verified: false,

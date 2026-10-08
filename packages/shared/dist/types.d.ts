@@ -110,6 +110,7 @@ export interface Scan {
     workspace_path?: string | null;
     confirmed_ownership?: boolean;
     result_json?: unknown | null;
+    discovery_summary?: unknown | null;
     findings_count?: number;
     critical_count?: number;
     high_count?: number;

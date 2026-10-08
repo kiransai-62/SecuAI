@@ -1,100 +1,184 @@
 # SecuAI 🛡️
+> **"Build with AI. Deploy with Confidence."**
 
-**SecuAI** is an autonomous AppSec feedback platform engineered for AI-generated applications. It introduces a closed security engineering loop:
+SecuAI is an enterprise application security testing (AST) and automated remediation platform. It provides developers and platform engineers with a verified, closed-loop security workflow:
 
-$$\text{DETECT} \longrightarrow \text{EXPLAIN} \longrightarrow \text{FIX} \longrightarrow \text{VERIFY} \longrightarrow \text{RE-SCAN}$$
-
----
-
-## 🌟 Upstream Engine Attribution
-
-SecuAI relies on **[`isitsecure`](https://github.com/jaurakunal/isitsecure)** by **Kunal Jaura** as its core static and dynamic security analysis engine.
-All vulnerability detection and verification across SAST, DAST, secrets, and PostgreSQL/Supabase RLS policies are performed via the `isitsecure` engine subprocess.
+$$\text{DETECT} \longrightarrow \text{EXPLAIN} \longrightarrow \text{FIX} \longrightarrow \text{VERIFY} \longrightarrow \text{SECURE}$$
 
 ---
 
-## 🏛️ Architecture & Principles
+## 🌟 Core Product Workflows
 
-1. **Strict Division of Responsibility**:
-   - **Scanner Engine (`isitsecure`)**: Performs **100%** of vulnerability detection and patch verification.
-   - **AI Assistant (`Gemini 3.8`)**: Operates **strictly server-side**. Gemini only explains root causes and blast radii and proposes unified git diffs; it **never** sets finding statuses or security scores.
-2. **Zero Redis / BullMQ**:
-   - Background jobs are managed via a Node.js polling worker querying Supabase/Postgres (`WHERE status = 'queued'`).
-3. **Multi-Tenant Security**:
-   - Supabase PostgreSQL with strict Row Level Security (RLS) policies.
-   - Unauthorized attempts to access other users' resources return **`404 Not Found`** (not `403 Forbidden`) to prevent resource enumeration.
-4. **Code Execution Safety**:
-   - Uploaded or scanned code is **never executed** — only static AST, taint, and policy checks are performed.
-5. **Deterministic Fingerprints**:
-   - Findings are tracked via deterministic SHA-256 fingerprints: `sha256(rule + normalized_path + sink_or_endpoint)`. Line numbers are intentionally excluded to ensure persistence across refactors and whitespace changes.
+1. **GitHub Repository Scanning**:
+   - Automated ingestion and static analysis of remote repositories.
+   - Isolated temporary workspace execution (code is never run or installed).
+   - Deep discovery: frameworks, package manifests, routes, and authentication middleware.
+   - Deterministic AST, secrets, configurations, and dependency scanners.
+2. **Source Code / ZIP Archive Scanning**:
+   - Defensive archive ingestion pipeline with zip-slip and path traversal protections.
+   - Extracts into quarantined workspace and builds a comprehensive component inventory.
+   - Scans for vulnerabilities, leaked tokens, and configuration flaws.
+3. **Live Web Endpoint Scanning**:
+   - Passive & safe active Dynamic Application Security Testing (DAST) for authorized targets.
+   - Strict SSRF protection (private IP, loopback, and metadata service blocklist).
+   - Header inspection (CSP, HSTS, X-Frame-Options), CORS validation, cookie flags, and TLS checks.
+4. **AI Security Assistant (Gemini 2.5 Flash)**:
+   - Dedicated security copilot operating **strictly on the backend** (`GEMINI_API_KEY` never leaks to the client).
+   - Context-grounded in actual findings, scan coverage, and code snippets.
+   - Answers priority queries ("What should I fix first?"), explains blast radius, and suggests unified git diffs.
+   - **Zero Hallucination Rule**: AI never invents findings and cannot mark an issue resolved.
+5. **Deterministic Verification Engine**:
+   - Fix verification is 100% scanner-based using `PatchVerifier` and `EngineVerifier`.
+   - Re-evaluates patched files against the exact deterministic rule logic.
+   - Automatically recomputes the deterministic security score upon verified patch application.
 
 ---
 
-## 📂 Monorepo Structure
+## 🏛️ System Architecture
 
 ```text
 SecuAI/
-├── apps/
-│   ├── api/                 # Express + TS backend (Helmet, Zod, Gemini server-side, worker)
-│   └── web/                 # React 19 + Vite + Tailwind CSS + TanStack Query dashboard
 ├── packages/
-│   └── shared/              # Zod schemas (FindingSchema, etc.) & TypeScript contracts
+│   └── shared/              # Shared types, Zod schemas, Finding contracts & scoring logic
 ├── engine/
-│   └── adapter/             # isitsecure subprocess runner, normalizer, and fixtures
-│       ├── __fixtures__/    # Authentic sample.json from demo app scan
-│       ├── run.ts           # Non-shell process spawn with timeout
-│       ├── normalize.ts     # Field mapper & stable SHA-256 fingerprinting
-│       └── adapter.test.ts  # Test suite verifying acceptance criteria
-├── supabase/
-│   └── migrations/          # 001_secuai_schema.sql (RLS enabled on all tables)
-├── demo-vulnerable-app/     # Sample app with RLS weaknesses, secrets, and auth issues
-└── Dockerfile               # Single container packaging Node.js + Python + isitsecure
+│   └── adapter/             # Unified scanner engine (@secuai/engine-adapter)
+│       ├── src/
+│       │   ├── pipeline.ts  # UnifiedScanPipeline coordinator
+│       │   ├── discovery.ts # DiscoveryEngine (tech, manifests, routes)
+│       │   ├── adapters.ts  # GitHub, Source, Web, Secret, Config, Dep adapters
+│       │   ├── verifier.ts  # PatchVerifier & EngineVerifier
+│       │   ├── normalize.ts # Deterministic SHA-256 fingerprinting & normalizer
+│       │   └── rules.ts     # Deterministic AST & regex rules
+│       └── __fixtures__/    # Upstream sample fixtures
+├── apps/
+│   ├── api/                 # Express backend (JWT, RLS, Workers, Gemini Copilot)
+│   │   ├── src/
+│   │   │   ├── worker.ts    # Background scan worker
+│   │   │   ├── routes.ts    # REST API endpoints
+│   │   │   ├── controllers/ # Scans, Findings, Projects, AI controllers
+│   │   │   └── services/    # Gemini 2.5 SDK integration & prompt engineering
+│   └── web/                 # React 19 + TypeScript + Vite + Tailwind CSS SPA
+│       └── src/
+│           ├── pages/       # NewScan, Findings, ScanDetail, AiAssistant, Projects
+│           ├── components/  # Real-time state machine, charts, and diff viewer
+│           └── services/    # REST API client
+├── test/
+│   └── fixtures/
+│       └── security/        # Controlled vulnerable & clean test fixtures
+│           ├── vulnerable-node-app/  # Known SQLi, Command Injection, CORS, Auth, Secrets
+│           └── clean-node-app/       # Parameterized, authenticated, hardened reference app
+├── scripts/                 # Master verification scripts (test-unified-scanner, test-verify-finding)
+└── docs/                    # Technical architecture & subsystem documentation
 ```
 
 ---
 
-## 🧪 Testing the Engine Adapter
+## 📋 Comprehensive Documentation
 
-To execute the unit tests against the real fixture:
+Detailed specifications and architectural guides are available in [`docs/`](file:///c:/PROJECTS/SecuAI/docs):
 
-```bash
-npx tsx --test engine/adapter/adapter.test.ts
-```
-
-All 6 test suites pass with:
-
-- `≥ 1 CRITICAL / HIGH` findings validated.
-- Access control (`rls_misconfiguration`, `auth_weakness`) findings confirmed.
-- Strict `FindingSchema` Zod validation enforced on every finding.
-- Stable fingerprints independent of line numbers.
-- Unmappable upstream fields documented.
-- Fallback verification by fingerprint diff verified.
+- [Current System Audit](file:///c:/PROJECTS/SecuAI/docs/current-system-audit.md) - Deep codebase audit, broken components identified, and remediation strategy.
+- [System Architecture](file:///c:/PROJECTS/SecuAI/docs/architecture.md) - High-level topology, monorepo breakdown, and separation of detection vs. AI.
+- [Scanning Pipeline](file:///c:/PROJECTS/SecuAI/docs/scanning-pipeline.md) - Unified 5-phase pipeline, state machine, and discovery summary.
+- [GitHub Repository Scanning](file:///c:/PROJECTS/SecuAI/docs/github-scanning.md) - Ingestion, safe shallow clone, discovery, and AST rules.
+- [Source & ZIP Upload Scanning](file:///c:/PROJECTS/SecuAI/docs/upload-scanning.md) - Safe archive handling, size limits, and zip-slip prevention.
+- [Live Web Endpoint Scanning](file:///c:/PROJECTS/SecuAI/docs/web-scanning.md) - Authorization checks, SSRF guardrails, passive and active checks.
+- [AI Assistant Architecture](file:///c:/PROJECTS/SecuAI/docs/ai-assistant.md) - Server-side Gemini copilot, context payload, and structured output.
+- [Verification Engine](file:///c:/PROJECTS/SecuAI/docs/verification.md) - Engine-based patch verification and score recomputation.
+- [Security Model](file:///c:/PROJECTS/SecuAI/docs/security-model.md) - Multi-tenancy, RLS policies, code execution safety, and secret handling.
+- [Testing Strategy](file:///c:/PROJECTS/SecuAI/docs/testing.md) - Fixtures, automated test runners, and zero-mock standards.
 
 ---
 
-## 🚀 Running Locally
+## ⚙️ Environment Variables
+
+Create `.env` in `apps/api/`:
 
 ```bash
-# Install dependencies across monorepo
+# Server Port
+PORT=4000
+NODE_ENV=development
+
+# JWT Authentication
+JWT_SECRET=your_super_secret_jwt_key_at_least_32_chars_long
+
+# Gemini AI (Server-Side Only)
+GEMINI_API_KEY=AIzaSy...
+
+# Optional: Supabase PostgreSQL (Falls back to in-memory DB if omitted)
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=eyJh...
+```
+
+Create `.env` in `apps/web/`:
+
+```bash
+VITE_API_URL=http://localhost:4000/api
+```
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+- Node.js >= 20.0.0
+- npm >= 10.0.0
+
+### Installation
+```bash
+# Clone the repository
+git clone https://github.com/kiransai-62/SecuAI.git
+cd SecuAI
+
+# Install all dependencies across workspaces
 npm install
 
 # Build all packages
 npm run build
-
-# Start API & Postgres worker
-npm run dev:api
-
-# Start Web Dashboard
-npm run dev:web
 ```
+
+### Running Locally
+```bash
+# Terminal 1: Start Backend API (Port 4000)
+npm --workspace=apps/api run dev
+
+# Terminal 2: Start Frontend Web App (Port 5173)
+npm --workspace=apps/web run dev
+```
+
+Visit `http://localhost:5173` in your browser.
 
 ---
 
-## 🐳 Docker Deployment
+## 🧪 Automated Testing & Validation
 
-A single multi-runtime container packages Node.js 22, Python 3.11, and `isitsecure`:
+SecuAI comes with full test suites validating the end-to-end scanner against real fixtures:
 
 ```bash
-docker build -t secuai .
-docker run -p 4000:4000 secuai
+# 1. Run Master Scanner Pipeline Test (Tests A through G)
+npx tsx scripts/test-unified-scanner.ts
+
+# 2. Run Finding Verification Suite (Tests 1 through 9)
+npx tsx scripts/test-verify-finding.ts
+
+# 3. Run Upstream Adapter Unit Tests
+npm --workspace=engine/adapter test
 ```
+
+### Master Validation Summary:
+- **TEST A**: Vulnerable Repository $\longrightarrow$ Real findings detected, zero score, full evidence.
+- **TEST B**: Clean Repository $\longrightarrow$ 0 findings, 100 score, no hallucinations.
+- **TEST C**: ZIP Archive Ingestion $\longrightarrow$ Safe extraction, findings detected and persisted.
+- **TEST D**: Live Web Scanning $\longrightarrow$ SSRF protections active, real security header findings.
+- **TEST E**: Finding Lifecycle $\longrightarrow$ OPEN $\to$ Patch Applied $\to$ VERIFIED by scanner.
+- **TEST F**: AI Assistant Prioritization $\longrightarrow$ Correctly ranks detected findings.
+- **TEST G**: AI Assistant Posture Assessment $\longrightarrow$ Evidence-grounded posture appraisal with limitations.
+
+---
+
+## 🔒 Security Principles
+
+- **No Mock Security Results**: No hardcoded findings or synthetic vulnerabilities in production workflows.
+- **No Fake Progress**: All progress indicators reflect real backend worker states.
+- **Deterministic Scores**: Score = 100 - (Critical $\times$ 25 + High $\times$ 15 + Medium $\times$ 7 + Low $\times$ 2).
+- **Scanner-Driven Verification**: Only the deterministic security engine can verify patches.

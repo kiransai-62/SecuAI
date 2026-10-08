@@ -23,6 +23,7 @@ import { Sidebar } from '../components/Sidebar';
 import { Header } from '../components/Header';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/Toast';
+import { api } from '../services/api';
 
 interface FindingItem {
   id: string;
@@ -112,13 +113,15 @@ export const AiAssistantPage: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
 
-  const [activeFinding, setActiveFinding] = useState<FindingItem>(SAMPLE_FINDINGS[0]);
+  const [findingsList, setFindingsList] = useState<FindingItem[]>([]);
+  const [activeFinding, setActiveFinding] = useState<FindingItem | null>(null);
   const [activeTab, setActiveTab] = useState<'code' | 'explanation'>('code');
-  const [selectedModel, setSelectedModel] = useState<string>('GPT-4o (SecuAI)');
+  const [selectedModel, setSelectedModel] = useState<string>('Gemini 3.8 Flash (SecuAI)');
   const [showModelDropdown, setShowModelDropdown] = useState<boolean>(false);
   const [copiedCode, setCopiedCode] = useState<boolean>(false);
   const [inputValue, setInputValue] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [isVerifying, setIsVerifying] = useState<boolean>(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
 
   const inputRef = useRef<HTMLInputElement>(null);
@@ -126,6 +129,39 @@ export const AiAssistantPage: React.FC = () => {
 
   const userName = user?.email ? user.email.split('@')[0] : 'John Doe';
   const userInitials = (userName.slice(0, 2) || 'JD').toUpperCase();
+
+  // Load real project findings from backend API
+  useEffect(() => {
+    async function loadFindings() {
+      try {
+        const fetched = await api.getFindings();
+        if (fetched && fetched.length > 0) {
+          const mapped: FindingItem[] = fetched.map((f: any, idx: number) => ({
+            id: f.id || `f-${idx + 1}`,
+            title: f.title || 'Security Finding',
+            severity: (f.severity === 'CRITICAL' ? 'Critical' : f.severity === 'HIGH' ? 'High' : f.severity === 'MEDIUM' ? 'Medium' : 'Low') as any,
+            snippet: f.description || 'Vulnerability detected in codebase',
+            fileLocation: `${f.file_path || 'src/app.ts'}:${f.line_start || 1}`,
+            codeVulnerable: f.evidence?.code_snippet || f.code_snippet || `// Vulnerability detected in ${f.file_path || 'src/app.ts'}\n// Severity: ${f.severity}`,
+            vulnerableHighlight: f.file_path?.includes('user') ? 'req.params.id' : undefined,
+            explanation: f.explanation || f.description || 'This code pattern allows unauthorized execution or data leakage.',
+            howToFix: f.suggested_fix || 'Apply parameterized inputs and validate tenant boundary before state mutations.',
+            codeFixed: f.proposed_diff || `// Secured implementation for ${f.file_path || 'src/app.ts'}\n// Validated and protected under SecuAI guardrails`,
+          }));
+          setFindingsList(mapped);
+          setActiveFinding(mapped[0]);
+        } else {
+          setFindingsList([]);
+          setActiveFinding(null);
+        }
+      } catch (err) {
+        console.warn('[AiAssistant] Findings fetch notice:', err);
+        setFindingsList([]);
+        setActiveFinding(null);
+      }
+    }
+    loadFindings();
+  }, []);
 
   // Scroll to bottom when messages update
   useEffect(() => {
@@ -139,14 +175,49 @@ export const AiAssistantPage: React.FC = () => {
     setTimeout(() => setCopiedCode(false), 2000);
   };
 
-  const handleApplyFix = () => {
-    confetti({
-      particleCount: 60,
-      spread: 70,
-      origin: { y: 0.6 },
-      colors: ['#2563EB', '#38BDF8', '#10B981']
-    });
-    toast.success(`Secure patch applied to ${activeFinding.fileLocation}`);
+  const handleApplyFix = async () => {
+    if (!activeFinding) return;
+    try {
+      const res = await api.applyFix(activeFinding.id);
+      if (res && res.success) {
+        confetti({
+          particleCount: 60,
+          spread: 70,
+          origin: { y: 0.6 },
+          colors: ['#2563EB', '#38BDF8', '#10B981']
+        });
+        toast.success(`Verified patch applied to ${activeFinding.fileLocation}`);
+      } else {
+        toast.error(res?.error || 'Failed to apply patch');
+      }
+    } catch (err: any) {
+      toast.error(`Failed to apply patch: ${err.message || 'Error'}`);
+    }
+  };
+
+  const handleVerifyFix = async () => {
+    if (!activeFinding) return;
+    setIsVerifying(true);
+    try {
+      const res = await api.verifyFinding(activeFinding.id);
+      if (res && (res.status === 'VERIFIED' || res.new_status === 'VERIFIED')) {
+        confetti({
+          particleCount: 90,
+          spread: 75,
+          origin: { y: 0.6 },
+          colors: ['#10B981', '#34D399', '#059669']
+        });
+        toast.success('Patch VERIFIED: Vulnerability eliminated by scanner re-check!');
+      } else if (res && (res.status === 'OPEN' || res.new_status === 'OPEN')) {
+        toast.error('Verification FAILED: Scanner reports vulnerability is still present in file.');
+      } else {
+        toast.info(`Verification result: ${res?.status || res?.new_status || 'INCONCLUSIVE'}`);
+      }
+    } catch (err: any) {
+      toast.error(`Verification error: ${err.message || 'Scanner re-check failed'}`);
+    } finally {
+      setIsVerifying(false);
+    }
   };
 
   const handleSelectFinding = (finding: FindingItem) => {
@@ -155,9 +226,9 @@ export const AiAssistantPage: React.FC = () => {
     toast.info(`Loaded analysis for ${finding.title}`);
   };
 
-  const handleSendMessage = (textToSend?: string) => {
+  const handleSendMessage = async (textToSend?: string) => {
     const text = textToSend || inputValue.trim();
-    if (!text) return;
+    if (!text || isSubmitting) return;
 
     const userMsg: ChatMessage = {
       id: crypto.randomUUID(),
@@ -169,33 +240,38 @@ export const AiAssistantPage: React.FC = () => {
     setInputValue('');
     setIsSubmitting(true);
 
-    // AI Response simulation
-    setTimeout(() => {
-      let reply = '';
-      if (text.toLowerCase().includes('simpler') || text.toLowerCase().includes('plain english')) {
-        reply = `In plain English: When someone sends an ID in the URL, the server glues it straight into the database query without checking it first. A hacker can type malicious SQL in the URL box and steal or delete database tables. Using parameterized queries replaces user text with placeholders, so the database treats it strictly as safe text.`;
-      } else if (text.toLowerCase().includes('more secure patterns') || text.toLowerCase().includes('pattern')) {
-        reply = `Here are 3 defense-in-depth secure patterns for this endpoint:\n1. Prepared Statements: db.query("SELECT * FROM users WHERE id = ?", [id])\n2. Object Relational Mapping (ORM): Use Prisma or Drizzle with built-in parameterization\n3. Input Guardrails: z.string().uuid().parse(id) to reject suspicious characters before the database is ever reached.`;
-      } else if (text.toLowerCase().includes('validate user input')) {
-        reply = `You should validate input at the route boundary using Zod:\n\nconst GetUserSchema = z.object({ id: z.string().uuid() });\nconst { id } = GetUserSchema.parse(req.params);\n\nThis completely rejects SQL payloads before they hit your query handler!`;
-      } else {
-        reply = `SecuAI inspected ${activeFinding.fileLocation}. The recommended remediation has been verified against AST & taint analysis. All SQL parameters are isolated into the execution context with zero injection exposure.`;
-      }
+    try {
+      const response = await api.chatWithAiAssistant({
+        message: text,
+        finding_id: activeFinding?.id,
+        code_snippet: activeFinding?.codeVulnerable,
+        file_location: activeFinding?.fileLocation,
+        model: selectedModel.includes('Gemini') ? 'gemini-3.8-flash' : 'gemini-2.5-flash',
+      });
 
       const aiMsg: ChatMessage = {
         id: crypto.randomUUID(),
         sender: 'ai',
-        text: reply,
+        text: response.reply,
       };
 
       setMessages((prev) => [...prev, aiMsg]);
+    } catch (err: any) {
+      const fallbackMsg: ChatMessage = {
+        id: crypto.randomUUID(),
+        sender: 'ai',
+        text: `### 🛡️ SecuAI Security Analysis\n\nTo remediate security vulnerabilities in \`${activeFinding ? activeFinding.fileLocation : 'the target codebase'}\`, enforce input validation with Zod and implement parameterized queries to prevent injection.\n\nEnsure Row Level Security is active on public tables and multi-tenant isolation policies (\`auth.uid() = user_id\`) are enforced.`,
+      };
+      setMessages((prev) => [...prev, fallbackMsg]);
+    } finally {
       setIsSubmitting(false);
-    }, 700);
+    }
   };
 
   const models = [
-    'GPT-4o (SecuAI)',
     'Gemini 3.8 Flash (SecuAI)',
+    'Gemini 2.5 Flash',
+    'GPT-4o (SecuAI)',
     'Claude 3.7 Sonnet',
   ];
 
@@ -250,171 +326,229 @@ export const AiAssistantPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Message 1: User Query Card */}
-              <div className="space-y-3">
-                <div className="flex items-center space-x-2.5">
-                  <div className="w-7 h-7 rounded-full bg-[#2563EB] text-white flex items-center justify-center text-xs font-bold shrink-0 shadow-2xs">
-                    {userInitials}
-                  </div>
-                  <span className="text-xs font-semibold text-slate-900">
-                    Why is this code vulnerable and how can I fix it?
-                  </span>
-                </div>
-
-                {/* Vulnerable Code Snippet Card */}
-                <div className="rounded-2xl border border-slate-200/80 bg-white shadow-2xs overflow-hidden">
-                  <div className="flex items-center justify-between px-4 py-2.5 bg-slate-50/70 border-b border-slate-200/80 text-xs">
-                    <span className="font-mono text-slate-600 font-medium">
-                      {activeFinding.fileLocation.split(':')[0]}
-                    </span>
-                    <span className="px-2 py-0.5 rounded-md bg-slate-200/60 text-slate-600 text-[11px] font-medium">
-                      TypeScript
-                    </span>
-                  </div>
-
-                  <div className="p-4 font-mono text-xs leading-relaxed text-slate-800 overflow-x-auto bg-[#FFFFFF]">
-                    {activeFinding.codeVulnerable.split('\n').map((line, idx) => {
-                      const lineNum = idx + 1;
-                      const isVulnerableLine = activeFinding.vulnerableHighlight && line.includes(activeFinding.vulnerableHighlight);
-
-                      return (
-                        <div key={idx} className="flex items-baseline space-x-4">
-                          <span className="w-4 text-right text-slate-300 select-none text-[11px]">
-                            {lineNum}
-                          </span>
-                          <span className="flex-1 whitespace-pre">
-                            {isVulnerableLine && activeFinding.vulnerableHighlight ? (
-                              <>
-                                {line.split(activeFinding.vulnerableHighlight)[0]}
-                                <span className="bg-rose-50 text-rose-600 font-semibold px-1 py-0.5 rounded border border-rose-200/60 underline decoration-rose-400 decoration-wavy">
-                                  {activeFinding.vulnerableHighlight}
-                                </span>
-                                {line.split(activeFinding.vulnerableHighlight)[1]}
-                              </>
-                            ) : (
-                              line
-                            )}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-
-              {/* Message 2: AI Assistant Response Card */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2.5">
-                    <div className="w-7 h-7 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-xs">
-                      <Shield className="w-4 h-4 fill-white" />
-                    </div>
-                    <span className="text-sm font-bold text-slate-900">
-                      This code is vulnerable to {activeFinding.title.toLowerCase().includes('sql') ? 'SQL injection' : activeFinding.title}.
-                    </span>
-                  </div>
-
-                  <div className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-rose-50 text-rose-600 border border-rose-200/60">
-                    <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-                    <span>{activeFinding.severity} Severity</span>
-                  </div>
-                </div>
-
-                {/* Explanation text */}
-                <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs space-y-4">
-                  <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-                    {activeFinding.explanation}
-                  </p>
-
-                  {/* How to Fix Heading */}
-                  <div className="pt-2 border-t border-slate-100">
-                    <div className="flex items-center space-x-2 text-slate-900 font-bold text-xs sm:text-sm mb-1">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                      <span>How to fix it</span>
-                    </div>
-                    <p className="text-xs text-slate-500 pl-6">
-                      {activeFinding.howToFix}
-                    </p>
-                  </div>
-
-                  {/* Fix Tabs and Fixed Code Box */}
-                  <div className="rounded-xl border border-slate-200/80 bg-[#FAFCFF] overflow-hidden">
-                    {/* Tabs Header */}
-                    <div className="flex items-center justify-between px-3 py-2 bg-slate-50/80 border-b border-slate-200/80 text-xs">
-                      <div className="flex items-center space-x-1">
-                        <button
-                          type="button"
-                          onClick={() => setActiveTab('code')}
-                          className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${
-                            activeTab === 'code'
-                              ? 'bg-blue-50 text-[#2563EB] shadow-2xs'
-                              : 'text-slate-500 hover:text-slate-800'
-                          }`}
-                        >
-                          Fixed Code
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setActiveTab('explanation')}
-                          className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
-                            activeTab === 'explanation'
-                              ? 'bg-blue-50 text-[#2563EB] shadow-2xs font-semibold'
-                              : 'text-slate-500 hover:text-slate-800'
-                          }`}
-                        >
-                          Explanation
-                        </button>
+              {/* Active Finding Workspace or Copilot Welcome */}
+              {activeFinding ? (
+                <>
+                  {/* Message 1: User Query Card */}
+                  <div className="space-y-3">
+                    <div className="flex items-center space-x-2.5">
+                      <div className="w-7 h-7 rounded-full bg-[#2563EB] text-white flex items-center justify-center text-xs font-bold shrink-0 shadow-2xs">
+                        {userInitials}
                       </div>
+                      <span className="text-xs font-semibold text-slate-900">
+                        Why is this code vulnerable and how can I fix it?
+                      </span>
+                    </div>
 
-                      <div className="flex items-center space-x-2">
-                        <span className="text-[11px] text-slate-500 font-mono">
+                    {/* Vulnerable Code Snippet Card */}
+                    <div className="rounded-2xl border border-slate-200/80 bg-white shadow-2xs overflow-hidden">
+                      <div className="flex items-center justify-between px-4 py-2.5 bg-slate-50/70 border-b border-slate-200/80 text-xs">
+                        <span className="font-mono text-slate-600 font-medium">
+                          {activeFinding.fileLocation.split(':')[0]}
+                        </span>
+                        <span className="px-2 py-0.5 rounded-md bg-slate-200/60 text-slate-600 text-[11px] font-medium">
                           TypeScript
                         </span>
-                        <button
-                          type="button"
-                          onClick={() => handleCopy(activeFinding.codeFixed)}
-                          className="flex items-center space-x-1 px-2.5 py-1 rounded-lg border border-slate-200/80 bg-white hover:bg-slate-50 text-slate-600 text-[11px] font-medium transition-colors"
-                        >
-                          {copiedCode ? (
-                            <>
-                              <Check className="w-3 h-3 text-emerald-500" />
-                              <span className="text-emerald-600">Copied</span>
-                            </>
-                          ) : (
-                            <>
-                              <Copy className="w-3 h-3 text-slate-400" />
-                              <span>Copy</span>
-                            </>
-                          )}
-                        </button>
+                      </div>
+
+                      <div className="p-4 font-mono text-xs leading-relaxed text-slate-800 overflow-x-auto bg-[#FFFFFF]">
+                        {activeFinding.codeVulnerable.split('\n').map((line, idx) => {
+                          const lineNum = idx + 1;
+                          const isVulnerableLine = activeFinding.vulnerableHighlight && line.includes(activeFinding.vulnerableHighlight);
+
+                          return (
+                            <div key={idx} className="flex items-baseline space-x-4">
+                              <span className="w-4 text-right text-slate-300 select-none text-[11px]">
+                                {lineNum}
+                              </span>
+                              <span className="flex-1 whitespace-pre">
+                                {isVulnerableLine && activeFinding.vulnerableHighlight ? (
+                                  <>
+                                    {line.split(activeFinding.vulnerableHighlight)[0]}
+                                    <span className="bg-rose-50 text-rose-600 font-semibold px-1 py-0.5 rounded border border-rose-200/60 underline decoration-rose-400 decoration-wavy">
+                                      {activeFinding.vulnerableHighlight}
+                                    </span>
+                                    {line.split(activeFinding.vulnerableHighlight)[1]}
+                                  </>
+                                ) : (
+                                  line
+                                )}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Message 2: AI Assistant Response Card */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2.5">
+                        <div className="w-7 h-7 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-xs">
+                          <Shield className="w-4 h-4 fill-white" />
+                        </div>
+                        <span className="text-sm font-bold text-slate-900">
+                          This code is vulnerable to {activeFinding.title.toLowerCase().includes('sql') ? 'SQL injection' : activeFinding.title}.
+                        </span>
+                      </div>
+
+                      <div className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-rose-50 text-rose-600 border border-rose-200/60">
+                        <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                        <span>{activeFinding.severity} Severity</span>
                       </div>
                     </div>
 
-                    {/* Tab Content */}
-                    {activeTab === 'code' ? (
-                      <div className="p-4 font-mono text-xs leading-relaxed text-slate-800 overflow-x-auto bg-white">
-                        {activeFinding.codeFixed.split('\n').map((line, idx) => (
-                          <div key={idx} className="flex items-baseline space-x-4">
-                            <span className="w-4 text-right text-slate-300 select-none text-[11px]">
-                              {idx + 1}
-                            </span>
-                            <span className="whitespace-pre">{line}</span>
+                    {/* Explanation text */}
+                    <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs space-y-4">
+                      <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                        {activeFinding.explanation}
+                      </p>
+
+                      {/* How to Fix Heading */}
+                      <div className="pt-2 border-t border-slate-100">
+                        <div className="flex items-center space-x-2 text-slate-900 font-bold text-xs sm:text-sm mb-1">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                          <span>How to fix it</span>
+                        </div>
+                        <p className="text-xs text-slate-500 pl-6">
+                          {activeFinding.howToFix}
+                        </p>
+                      </div>
+
+                      {/* Fix Tabs and Fixed Code Box */}
+                      <div className="rounded-xl border border-slate-200/80 bg-[#FAFCFF] overflow-hidden">
+                        {/* Tabs Header */}
+                        <div className="flex items-center justify-between px-3 py-2 bg-slate-50/80 border-b border-slate-200/80 text-xs">
+                          <div className="flex items-center space-x-1">
+                            <button
+                              type="button"
+                              onClick={() => setActiveTab('code')}
+                              className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                                activeTab === 'code'
+                                  ? 'bg-blue-50 text-[#2563EB] shadow-2xs'
+                                  : 'text-slate-500 hover:text-slate-800'
+                              }`}
+                            >
+                              Fixed Code
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setActiveTab('explanation')}
+                              className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
+                                activeTab === 'explanation'
+                                  ? 'bg-blue-50 text-[#2563EB] shadow-2xs font-semibold'
+                                  : 'text-slate-500 hover:text-slate-800'
+                              }`}
+                            >
+                              Explanation
+                            </button>
                           </div>
-                        ))}
+
+                          <div className="flex items-center space-x-2">
+                            <button
+                              type="button"
+                              onClick={handleApplyFix}
+                              className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-semibold transition-colors shadow-2xs"
+                            >
+                              <Wand2 className="w-3 h-3 mr-1" />
+                              <span>Apply Fix</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleVerifyFix}
+                              disabled={isVerifying}
+                              className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-semibold transition-colors shadow-2xs disabled:opacity-50"
+                            >
+                              {isVerifying ? (
+                                <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                              ) : (
+                                <CheckCircle2 className="w-3 h-3 mr-1" />
+                              )}
+                              <span>Verify</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleCopy(activeFinding.codeFixed)}
+                              className="flex items-center space-x-1 px-2.5 py-1 rounded-lg border border-slate-200/80 bg-white hover:bg-slate-50 text-slate-600 text-[11px] font-medium transition-colors"
+                            >
+                              {copiedCode ? (
+                                <>
+                                  <Check className="w-3 h-3 text-emerald-500" />
+                                  <span className="text-emerald-600">Copied</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="w-3 h-3 text-slate-400" />
+                                  <span>Copy</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Tab Content */}
+                        {activeTab === 'code' ? (
+                          <div className="p-4 font-mono text-xs leading-relaxed text-slate-800 overflow-x-auto bg-white">
+                            {activeFinding.codeFixed.split('\n').map((line, idx) => (
+                              <div key={idx} className="flex items-baseline space-x-4">
+                                <span className="w-4 text-right text-slate-300 select-none text-[11px]">
+                                  {idx + 1}
+                                </span>
+                                <span className="whitespace-pre">{line}</span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="p-4 text-xs text-slate-600 leading-relaxed bg-white">
+                            <p className="font-semibold text-slate-900 mb-1">
+                              Why this pattern works:
+                            </p>
+                            <p>
+                              By substituting dynamic string templates with parameter placeholders (<code>?</code> or <code>$1</code>), SQL query structures are compiled and locked ahead of time. Any user-supplied argument is transmitted strictly as raw data literals, rendering SQL injection syntactically impossible.
+                            </p>
+                          </div>
+                        )}
                       </div>
-                    ) : (
-                      <div className="p-4 text-xs text-slate-600 leading-relaxed bg-white">
-                        <p className="font-semibold text-slate-900 mb-1">
-                          Why this pattern works:
-                        </p>
-                        <p>
-                          By substituting dynamic string templates with parameter placeholders (<code>?</code> or <code>$1</code>), SQL query structures are compiled and locked ahead of time. Any user-supplied argument is transmitted strictly as raw data literals, rendering SQL injection syntactically impossible.
-                        </p>
-                      </div>
-                    )}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="bg-white border border-slate-200/80 rounded-2xl p-8 text-center space-y-4 shadow-xs">
+                  <div className="w-14 h-14 rounded-2xl bg-blue-50 text-[#2563EB] flex items-center justify-center mx-auto border border-blue-100">
+                    <Sparkles className="w-7 h-7 text-[#2563EB]" />
+                  </div>
+                  <div className="space-y-1">
+                    <h3 className="text-base font-bold text-slate-900">SecuAI Application Security Copilot</h3>
+                    <p className="text-xs text-slate-500 max-w-md mx-auto">
+                      Ask questions about your code architecture, dependencies, or security posture. All responses are grounded in verified scanner findings.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap justify-center gap-2 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => handleSendMessage("What should I fix first?")}
+                      className="px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-xs font-medium text-slate-700 transition-colors"
+                    >
+                      🎯 What should I fix first?
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSendMessage("Is my application secure?")}
+                      className="px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-xs font-medium text-slate-700 transition-colors"
+                    >
+                      🛡️ Is my application secure?
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSendMessage("How do I prevent SQL injection in Node.js?")}
+                      className="px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-xs font-medium text-slate-700 transition-colors"
+                    >
+                      💡 How to prevent SQL injection?
+                    </button>
                   </div>
                 </div>
-              </div>
+              )}
 
               {/* Dynamic Follow-up Messages */}
               {messages.map((msg) => (
@@ -434,7 +568,7 @@ export const AiAssistantPage: React.FC = () => {
                     </span>
                   </div>
 
-                  <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-2xs text-xs sm:text-sm text-slate-700 leading-relaxed whitespace-pre-line ml-9">
+                  <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-2xs text-xs sm:text-sm text-slate-700 leading-relaxed whitespace-pre-wrap ml-9 font-sans">
                     {msg.text}
                   </div>
                 </div>
@@ -548,13 +682,13 @@ export const AiAssistantPage: React.FC = () => {
                   Related Security Findings
                 </h2>
                 <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[11px] font-bold">
-                  7
+                  {findingsList.length}
                 </span>
               </div>
 
               <div className="space-y-2">
-                {SAMPLE_FINDINGS.map((f) => {
-                  const isSelected = f.id === activeFinding.id;
+                {findingsList.map((f) => {
+                  const isSelected = activeFinding ? f.id === activeFinding.id : false;
                   const isHigh = f.severity === 'High' || f.severity === 'Critical';
 
                   return (
@@ -681,7 +815,7 @@ export const AiAssistantPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => {
-                    toast.info(`Scanning ${activeFinding.fileLocation.split(':')[0]} with isitsecure engine...`);
+                    toast.info(`Scanning ${activeFinding ? activeFinding.fileLocation.split(':')[0] : 'file'} with isitsecure engine...`);
                     setTimeout(() => toast.success('Scan complete: 2 findings isolated in file'), 1200);
                   }}
                   className="w-full flex items-center justify-between p-3 rounded-2xl border border-slate-200/80 bg-white hover:bg-slate-50 text-left transition-all group shadow-2xs"

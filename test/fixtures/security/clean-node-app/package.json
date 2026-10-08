@@ -1,0 +1,14 @@
+{
+  "name": "clean-node-app",
+  "version": "1.0.0",
+  "description": "Clean test fixture for SecuAI scanner testing",
+  "main": "src/server.ts",
+  "scripts": {
+    "start": "node dist/server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "cors": "^2.8.5",
+    "zod": "^3.22.4"
+  }
+}

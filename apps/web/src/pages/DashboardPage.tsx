@@ -235,11 +235,11 @@ export const DashboardPage: React.FC = () => {
                 </Link>
 
                 <button
-                  onClick={() => navigate('/scans/scan-demo-001')}
+                  onClick={() => navigate('/new-scan')}
                   className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-200/80 text-xs font-semibold shadow-2xs transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                 >
                   <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-                  <span>Explore Demo Scan</span>
+                  <span>Start Security Scan</span>
                 </button>
               </div>
             </div>

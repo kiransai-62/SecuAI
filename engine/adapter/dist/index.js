@@ -14,6 +14,20 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+__exportStar(require("./types.js"), exports);
+__exportStar(require("./discovery/discoveryEngine.js"), exports);
+__exportStar(require("./rules/index.js"), exports);
+__exportStar(require("./normalizer/findingNormalizer.js"), exports);
+__exportStar(require("./adapters/securityScannerAdapter.js"), exports);
+__exportStar(require("./adapters/sourceScannerAdapter.js"), exports);
+__exportStar(require("./adapters/secretScannerAdapter.js"), exports);
+__exportStar(require("./adapters/dependencyScannerAdapter.js"), exports);
+__exportStar(require("./adapters/configurationScannerAdapter.js"), exports);
+__exportStar(require("./adapters/webScannerAdapter.js"), exports);
+__exportStar(require("./adapters/gitHubScannerAdapter.js"), exports);
+__exportStar(require("./pipeline.js"), exports);
+__exportStar(require("./verifier/patchVerifier.js"), exports);
+// Legacy exports for backwards compatibility
 __exportStar(require("./runner.js"), exports);
 __exportStar(require("./verifier.js"), exports);
 __exportStar(require("./run.js"), exports);
